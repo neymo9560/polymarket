@@ -104,22 +104,34 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    // Utiliser Polygonscan API pour les soldes (plus fiable)
-    const address = wallet.address
+    // Essayer plusieurs RPCs pour obtenir le solde
+    const rpcs = [
+      'https://polygon-mainnet.infura.io/v3/84842078b09946638c03157f83405213',
+      'https://polygon-bor-rpc.publicnode.com',
+      'https://polygon.drpc.org'
+    ]
     
-    // MATIC balance via Polygonscan
-    const maticUrl = `https://api.polygonscan.com/api?module=account&action=balance&address=${address}&tag=latest`
-    const maticRes = await fetch(maticUrl)
-    const maticData = await maticRes.json()
-    const maticBalance = maticData.result ? parseFloat(ethers.utils.formatEther(maticData.result)) : 0
+    let usdcBalance = 0
+    let maticBalance = 0
     
-    // USDC balance via Polygonscan
-    const usdcUrl = `https://api.polygonscan.com/api?module=account&action=tokenbalance&contractaddress=${USDC_ADDRESS}&address=${address}&tag=latest`
-    const usdcRes = await fetch(usdcUrl)
-    const usdcData = await usdcRes.json()
-    const usdcBalance = usdcData.result ? parseFloat(ethers.utils.formatUnits(usdcData.result, 6)) : 0
-    
-    console.log('Wallet balances:', { address, usdcBalance, maticBalance })
+    for (const rpc of rpcs) {
+      try {
+        const tempProvider = new ethers.providers.JsonRpcProvider(rpc)
+        const tempUsdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, tempProvider)
+        
+        const [usdcRaw, maticRaw] = await Promise.all([
+          tempUsdc.balanceOf(wallet.address),
+          tempProvider.getBalance(wallet.address)
+        ])
+        
+        usdcBalance = parseFloat(ethers.utils.formatUnits(usdcRaw, 6))
+        maticBalance = parseFloat(ethers.utils.formatEther(maticRaw))
+        console.log('Balances from', rpc, ':', { usdcBalance, maticBalance })
+        break
+      } catch (e) {
+        console.log('RPC failed:', rpc, e.message)
+      }
+    }
     
     res.json({
       address: wallet.address,
