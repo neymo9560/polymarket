@@ -4,7 +4,7 @@
  */
 
 // Backend Fly.io (Frankfurt, Allemagne)
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://polybot-backend-live.fly.dev'
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://polybot-backend-live-red-fog-601.fly.dev'
 
 // Health check
 export async function checkBackendHealth() {
