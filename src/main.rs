@@ -26,6 +26,7 @@ struct BotStatus {
     balance: f64,
     total_trades: u32,
     pnl: f64,
+    live_ready: bool,
 }
 
 #[derive(Deserialize)]
@@ -45,13 +46,29 @@ async fn health() -> Json<HealthResponse> {
 
 async fn status() -> Json<BotStatus> {
     let mode = env::var("BOT_MODE").unwrap_or_else(|_| "paper".to_string());
+    let has_private_key = env::var("POLYMARKET_PRIVATE_KEY").is_ok();
     Json(BotStatus {
         running: true,
         mode,
         balance: 300.0,
         total_trades: 0,
         pnl: 0.0,
+        live_ready: has_private_key,
     })
+}
+
+// Vérifier si le trading live est configuré
+async fn check_live_config() -> impl IntoResponse {
+    let has_key = env::var("POLYMARKET_PRIVATE_KEY").is_ok();
+    let mode = env::var("BOT_MODE").unwrap_or_else(|_| "paper".to_string());
+    
+    let response = serde_json::json!({
+        "live_ready": has_key,
+        "mode": mode,
+        "message": if has_key { "Clé privée configurée. Trading live disponible." } else { "Clé privée non configurée. Mode paper uniquement." }
+    });
+    
+    (StatusCode::OK, Json(response))
 }
 
 async fn proxy_markets(Query(params): Query<MarketsQuery>) -> impl IntoResponse {
@@ -224,6 +241,7 @@ async fn main() {
         .route("/", get(health))
         .route("/health", get(health))
         .route("/api/status", get(status))
+        .route("/api/live-config", get(check_live_config))
         .route("/api/markets", get(proxy_markets))
         .route("/api/markets/{id}", get(proxy_market_details))
         // CLOB API endpoints
