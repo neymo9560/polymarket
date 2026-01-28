@@ -140,14 +140,19 @@ function App() {
       const opp = opportunities[0]
       if (!opp) return
       
-      // Calculer le profit simulé (paper mode)
-      const tradeSize = Math.min(botState.balance * 0.02, 10) // 2% du capital max
+      // Position sizing dynamique (Kelly Criterion style)
+      const positionPct = opp.positionSize || 0.02
+      const tradeSize = Math.min(botState.balance * positionPct, botState.balance * 0.05) // Max 5% par trade
       const entryPrice = opp.action.includes('YES') ? opp.market.yesPrice : opp.market.noPrice
       
-      // Simuler le résultat du trade (basé sur la confiance)
-      const winProbability = 0.5 + (opp.confidence * 0.3) // 50-80% de chance de gagner selon confiance
+      // Simuler le résultat du trade (basé sur la confiance + edge réel)
+      const baseWinRate = 0.45 + (opp.confidence * 0.35) // 45-80% selon confiance
+      const edgeBonus = opp.expectedProfit > 5 ? 0.05 : 0 // Bonus si edge > 5%
+      const winProbability = Math.min(baseWinRate + edgeBonus, 0.85)
       const isWin = Math.random() < winProbability
-      const profit = isWin ? tradeSize * opp.expectedProfit / 100 : -tradeSize * 0.1
+      const profit = isWin 
+        ? tradeSize * (opp.expectedProfit / 100) * (0.7 + Math.random() * 0.6) // 70-130% du profit attendu
+        : -tradeSize * (0.05 + Math.random() * 0.1) // Perte 5-15%
       
       const newTrade = {
         id: Date.now(),

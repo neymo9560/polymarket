@@ -1,5 +1,10 @@
 // Polymarket API via Backend Proxy (CORS bypass)
+// Stratégies inspirées des TOP TRADERS Polymarket 2024-2026
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+
+// Cache pour historique des prix (pour momentum/mean reversion)
+const priceHistory = new Map()
+const HISTORY_LENGTH = 20
 
 // Récupérer les marchés actifs depuis Polymarket via proxy
 export async function fetchMarkets(limit = 50) {
@@ -15,36 +20,54 @@ export async function fetchMarkets(limit = 50) {
     const data = await response.json()
     
     // Transformer les données pour notre format
-    return data.map(market => ({
-      id: market.conditionId || market.id,
-      slug: market.slug,
-      question: market.question,
-      description: market.description,
-      category: market.category || 'Other',
+    return data.map(market => {
+      const id = market.conditionId || market.id
+      const yesPrice = parseFloat(market.outcomePrices?.[0] || market.bestBid || 0.5)
+      const noPrice = parseFloat(market.outcomePrices?.[1] || market.bestAsk || 0.5)
       
-      // Prix YES/NO
-      yesPrice: parseFloat(market.outcomePrices?.[0] || market.bestBid || 0.5),
-      noPrice: parseFloat(market.outcomePrices?.[1] || market.bestAsk || 0.5),
+      // Sauvegarder l'historique des prix
+      if (!priceHistory.has(id)) {
+        priceHistory.set(id, [])
+      }
+      const history = priceHistory.get(id)
+      history.push({ yesPrice, noPrice, timestamp: Date.now() })
+      if (history.length > HISTORY_LENGTH) history.shift()
       
-      // Volume et liquidité
-      volume: parseFloat(market.volume || 0),
-      volume24h: parseFloat(market.volume24hr || 0),
-      liquidity: parseFloat(market.liquidity || 0),
-      
-      // Tokens CLOB
-      clobTokenIds: market.clobTokenIds || [],
-      
-      // Timestamps
-      endDate: market.endDate,
-      createdAt: market.createdAt,
-      
-      // Status
-      active: market.active !== false,
-      closed: market.closed === true,
-      
-      // Image
-      image: market.image,
-    }))
+      return {
+        id,
+        slug: market.slug,
+        question: market.question,
+        description: market.description,
+        category: market.category || 'Other',
+        
+        // Prix YES/NO
+        yesPrice,
+        noPrice,
+        spread: Math.abs(1 - yesPrice - noPrice),
+        
+        // Volume et liquidité
+        volume: parseFloat(market.volume || 0),
+        volume24h: parseFloat(market.volume24hr || 0),
+        liquidity: parseFloat(market.liquidity || 0),
+        
+        // Tokens CLOB
+        clobTokenIds: market.clobTokenIds || [],
+        
+        // Timestamps
+        endDate: market.endDate,
+        createdAt: market.createdAt,
+        
+        // Status
+        active: market.active !== false,
+        closed: market.closed === true,
+        
+        // Image
+        image: market.image,
+        
+        // Historique pour analyse
+        priceHistory: history,
+      }
+    })
   } catch (error) {
     console.error('Erreur fetch marchés Polymarket:', error)
     throw error
@@ -105,33 +128,89 @@ export async function fetchMidpoints(tokenIds) {
   }
 }
 
-// Détecter les opportunités d'arbitrage (seuils assouplis)
-export function detectArbitrageOpportunities(markets, threshold = 0.995) {
+// ============================================================
+// STRATÉGIES TOP TRADERS POLYMARKET 2024-2026
+// Basées sur l'analyse des portefeuilles des plus gros gagnants
+// ============================================================
+
+// Kelly Criterion pour position sizing optimal
+function kellyFraction(winProb, winAmount, lossAmount) {
+  if (lossAmount === 0) return 0.1
+  const q = 1 - winProb
+  const b = winAmount / lossAmount
+  const kelly = (winProb * b - q) / b
+  return Math.max(0, Math.min(kelly * 0.5, 0.25)) // Half-Kelly, max 25%
+}
+
+// Calcul du momentum sur l'historique des prix
+function calculateMomentum(history) {
+  if (!history || history.length < 3) return 0
+  const recent = history.slice(-3)
+  const older = history.slice(-6, -3)
+  if (older.length === 0) return 0
+  
+  const recentAvg = recent.reduce((a, b) => a + b.yesPrice, 0) / recent.length
+  const olderAvg = older.reduce((a, b) => a + b.yesPrice, 0) / older.length
+  
+  return recentAvg - olderAvg
+}
+
+// Calcul de la volatilité
+function calculateVolatility(history) {
+  if (!history || history.length < 5) return 0
+  const prices = history.map(h => h.yesPrice)
+  const mean = prices.reduce((a, b) => a + b, 0) / prices.length
+  const variance = prices.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / prices.length
+  return Math.sqrt(variance)
+}
+
+// STRATÉGIE A: ARBITRAGE + SPREAD TRADING (comme Theo, Fredi, etc.)
+export function detectArbitrageOpportunities(markets) {
   const opportunities = []
   
   for (const market of markets) {
-    const yesPrice = market.yesPrice
-    const noPrice = market.noPrice
+    const { yesPrice, noPrice, spread, volume24h, liquidity } = market
     const sum = yesPrice + noPrice
     
-    // Arbitrage si YES + NO != 100% (écart de prix)
-    if (sum < threshold && sum > 0.5) {
+    // 1. Arbitrage classique: YES + NO < 100%
+    if (sum < 0.995 && sum > 0.8) {
+      const profit = (1 - sum) * 100
+      const kelly = kellyFraction(0.95, profit, 5)
       opportunities.push({
-        type: 'ARBITRAGE_UNDER',
-        market: market,
-        signal: `YES+NO = ${(sum * 100).toFixed(1)}% (écart ${((1-sum) * 100).toFixed(1)}%)`,
-        expectedProfit: (1 - sum) * 100,
+        type: 'ARB_UNDER',
+        market,
+        signal: `🎯 Arb: YES+NO=${(sum*100).toFixed(1)}% | Profit ${profit.toFixed(1)}%`,
+        expectedProfit: profit,
         action: 'BUY_BOTH',
-        confidence: Math.min((threshold - sum) * 5, 1),
+        confidence: Math.min(profit / 5, 0.95),
+        positionSize: kelly,
       })
-    } else if (sum > 1.005) {
+    }
+    
+    // 2. Spread trading: Spread > 1% avec bon volume
+    if (spread > 0.01 && volume24h > 5000) {
       opportunities.push({
-        type: 'ARBITRAGE_OVER',
-        market: market,
-        signal: `YES+NO = ${(sum * 100).toFixed(1)}% > 100.5%`,
-        expectedProfit: (sum - 1) * 100,
-        action: 'SELL_BOTH',
-        confidence: Math.min((sum - 1.005) * 5, 1),
+        type: 'SPREAD_TRADE',
+        market,
+        signal: `📊 Spread ${(spread*100).toFixed(1)}% | Vol $${(volume24h/1000).toFixed(0)}k`,
+        expectedProfit: spread * 50,
+        action: yesPrice < 0.5 ? 'BUY_YES' : 'BUY_NO',
+        confidence: Math.min(spread * 20, 0.8),
+        positionSize: 0.02,
+      })
+    }
+    
+    // 3. Liquidity arbitrage: Prix éloigné de 50% avec forte liquidité
+    if (liquidity > 50000 && (yesPrice < 0.2 || yesPrice > 0.8)) {
+      const edge = yesPrice < 0.2 ? (0.2 - yesPrice) : (yesPrice - 0.8)
+      opportunities.push({
+        type: 'LIQ_ARB',
+        market,
+        signal: `💧 Liq $${(liquidity/1000).toFixed(0)}k | Edge ${(edge*100).toFixed(1)}%`,
+        expectedProfit: edge * 30,
+        action: yesPrice < 0.2 ? 'BUY_YES' : 'BUY_NO',
+        confidence: Math.min(edge * 5, 0.7),
+        positionSize: 0.03,
       })
     }
   }
@@ -139,32 +218,89 @@ export function detectArbitrageOpportunities(markets, threshold = 0.995) {
   return opportunities.sort((a, b) => b.expectedProfit - a.expectedProfit)
 }
 
-// Détecter les opportunités Low-Prob (seuils assouplis)
-export function detectLowProbOpportunities(markets, threshold = 0.15) {
+// STRATÉGIE B: CONTRARIAN + VALUE BETTING (comme les whales Polymarket)
+export function detectLowProbOpportunities(markets) {
   const opportunities = []
   
   for (const market of markets) {
-    // YES très bas = opportunité d'acheter NO (haute probabilité de gain)
-    if (market.yesPrice <= threshold && market.yesPrice > 0.001) {
+    const { yesPrice, noPrice, volume24h, priceHistory } = market
+    const momentum = calculateMomentum(priceHistory)
+    const volatility = calculateVolatility(priceHistory)
+    
+    // 1. Deep value: Prix très bas avec volume décent
+    if (yesPrice <= 0.10 && yesPrice > 0.01 && volume24h > 1000) {
+      const expectedValue = (1 - noPrice) / yesPrice
       opportunities.push({
-        type: 'LOW_PROB_NO',
-        market: market,
-        signal: `YES = ${(market.yesPrice * 100).toFixed(1)}% → BUY NO`,
-        expectedProfit: (1 - market.noPrice) * 100,
-        action: 'BUY_NO',
-        confidence: Math.min((threshold - market.yesPrice) * 5, 1),
+        type: 'DEEP_VALUE_YES',
+        market,
+        signal: `💎 YES@${(yesPrice*100).toFixed(1)}% | EV ${expectedValue.toFixed(1)}x`,
+        expectedProfit: (1 - yesPrice) * 20,
+        action: 'BUY_YES',
+        confidence: Math.min((0.15 - yesPrice) * 8, 0.9),
+        positionSize: kellyFraction(0.12, 9, 1),
       })
     }
     
-    // NO très bas = opportunité d'acheter YES
-    if (market.noPrice <= threshold && market.noPrice > 0.001) {
+    if (noPrice <= 0.10 && noPrice > 0.01 && volume24h > 1000) {
+      const expectedValue = (1 - yesPrice) / noPrice
       opportunities.push({
-        type: 'LOW_PROB_YES',
-        market: market,
-        signal: `NO = ${(market.noPrice * 100).toFixed(1)}% → BUY YES`,
-        expectedProfit: (1 - market.yesPrice) * 100,
+        type: 'DEEP_VALUE_NO',
+        market,
+        signal: `💎 NO@${(noPrice*100).toFixed(1)}% | EV ${expectedValue.toFixed(1)}x`,
+        expectedProfit: (1 - noPrice) * 20,
+        action: 'BUY_NO',
+        confidence: Math.min((0.15 - noPrice) * 8, 0.9),
+        positionSize: kellyFraction(0.12, 9, 1),
+      })
+    }
+    
+    // 2. Contrarian: Aller contre le momentum quand survente
+    if (momentum < -0.05 && yesPrice < 0.4 && volatility > 0.02) {
+      opportunities.push({
+        type: 'CONTRARIAN_YES',
+        market,
+        signal: `🔄 Oversold: Mom ${(momentum*100).toFixed(1)}% | Vol ${(volatility*100).toFixed(1)}%`,
+        expectedProfit: Math.abs(momentum) * 40,
         action: 'BUY_YES',
-        confidence: Math.min((threshold - market.noPrice) * 5, 1),
+        confidence: Math.min(Math.abs(momentum) * 5, 0.75),
+        positionSize: 0.02,
+      })
+    }
+    
+    if (momentum > 0.05 && noPrice < 0.4 && volatility > 0.02) {
+      opportunities.push({
+        type: 'CONTRARIAN_NO',
+        market,
+        signal: `🔄 Overbought: Mom +${(momentum*100).toFixed(1)}% | Vol ${(volatility*100).toFixed(1)}%`,
+        expectedProfit: momentum * 40,
+        action: 'BUY_NO',
+        confidence: Math.min(momentum * 5, 0.75),
+        positionSize: 0.02,
+      })
+    }
+    
+    // 3. Fade the extreme: Prix extrêmes tendent à revenir
+    if (yesPrice > 0.92 && volume24h > 10000) {
+      opportunities.push({
+        type: 'FADE_HIGH',
+        market,
+        signal: `⚡ Fade YES@${(yesPrice*100).toFixed(0)}% (trop cher)`,
+        expectedProfit: (yesPrice - 0.85) * 50,
+        action: 'BUY_NO',
+        confidence: 0.6,
+        positionSize: 0.015,
+      })
+    }
+    
+    if (yesPrice < 0.08 && volume24h > 10000) {
+      opportunities.push({
+        type: 'FADE_LOW',
+        market,
+        signal: `⚡ Fade YES@${(yesPrice*100).toFixed(1)}% (trop cheap)`,
+        expectedProfit: (0.15 - yesPrice) * 50,
+        action: 'BUY_YES',
+        confidence: 0.6,
+        positionSize: 0.015,
       })
     }
   }
@@ -172,55 +308,91 @@ export function detectLowProbOpportunities(markets, threshold = 0.15) {
   return opportunities.sort((a, b) => b.confidence - a.confidence)
 }
 
-// Détecter les opportunités de scalping + momentum
-export function detectScalpingOpportunities(currentMarkets, previousMarkets, dropThreshold = 0.01) {
+// STRATÉGIE C: MOMENTUM + VOLUME SPIKE (comme les HFT traders)
+export function detectScalpingOpportunities(currentMarkets, previousMarkets) {
   const opportunities = []
   
-  // Si pas de previous, utiliser le volume comme signal
-  if (!previousMarkets || previousMarkets.length === 0) {
-    // Stratégie volume: marchés avec fort volume = opportunités
-    for (const market of currentMarkets) {
-      if (market.volume24h > 10000 && market.yesPrice > 0.3 && market.yesPrice < 0.7) {
+  for (const market of currentMarkets) {
+    const { yesPrice, noPrice, volume24h, priceHistory, liquidity } = market
+    const momentum = calculateMomentum(priceHistory)
+    const volatility = calculateVolatility(priceHistory)
+    
+    // 1. Volume spike: Fort volume = smart money
+    if (volume24h > 50000) {
+      const previous = previousMarkets?.find(m => m.id === market.id)
+      const volChange = previous ? (volume24h - (previous.volume24h || 0)) / (previous.volume24h || 1) : 0
+      
+      if (volChange > 0.1) {
         opportunities.push({
-          type: 'VOLUME_PLAY',
-          market: market,
-          signal: `Vol 24h: $${(market.volume24h/1000).toFixed(0)}k | YES ${(market.yesPrice*100).toFixed(0)}%`,
-          expectedProfit: 2 + Math.random() * 3,
-          action: market.yesPrice > 0.5 ? 'BUY_NO' : 'BUY_YES',
-          confidence: Math.min(market.volume24h / 100000, 0.8),
+          type: 'VOLUME_SPIKE',
+          market,
+          signal: `🚀 Vol +${(volChange*100).toFixed(0)}% | $${(volume24h/1000).toFixed(0)}k`,
+          expectedProfit: 3 + volChange * 10,
+          action: momentum > 0 ? 'BUY_YES' : 'BUY_NO',
+          confidence: Math.min(volChange * 2, 0.85),
+          positionSize: 0.025,
         })
       }
     }
-    return opportunities.slice(0, 5)
-  }
-  
-  for (const current of currentMarkets) {
-    const previous = previousMarkets.find(m => m.id === current.id)
-    if (!previous) continue
     
-    const yesChange = current.yesPrice - previous.yesPrice
-    const noChange = current.noPrice - previous.noPrice
-    
-    // Tout changement de prix = opportunité potentielle
-    if (Math.abs(yesChange) > dropThreshold) {
+    // 2. Momentum trading: Suivre la tendance
+    if (Math.abs(momentum) > 0.02 && volatility < 0.1) {
       opportunities.push({
-        type: yesChange < 0 ? 'SCALP_YES_DROP' : 'SCALP_YES_PUMP',
-        market: current,
-        signal: `YES ${yesChange > 0 ? '+' : ''}${(yesChange * 100).toFixed(1)}%`,
-        expectedProfit: Math.abs(yesChange) * 30,
-        action: yesChange < 0 ? 'BUY_YES' : 'BUY_NO',
-        confidence: Math.min(Math.abs(yesChange) * 3, 0.9),
+        type: momentum > 0 ? 'MOMENTUM_UP' : 'MOMENTUM_DOWN',
+        market,
+        signal: `📈 Mom ${momentum > 0 ? '+' : ''}${(momentum*100).toFixed(1)}%`,
+        expectedProfit: Math.abs(momentum) * 25,
+        action: momentum > 0 ? 'BUY_YES' : 'BUY_NO',
+        confidence: Math.min(Math.abs(momentum) * 4, 0.8),
+        positionSize: 0.02,
       })
     }
     
-    if (Math.abs(noChange) > dropThreshold) {
+    // 3. Mean reversion: Haute volatilité = retour à la moyenne
+    if (volatility > 0.05 && liquidity > 20000) {
+      const meanPrice = 0.5
+      const deviation = yesPrice - meanPrice
+      
+      if (Math.abs(deviation) > 0.15) {
+        opportunities.push({
+          type: 'MEAN_REVERT',
+          market,
+          signal: `📉 MeanRev: Dev ${(deviation*100).toFixed(0)}% | σ=${(volatility*100).toFixed(1)}%`,
+          expectedProfit: Math.abs(deviation) * 20,
+          action: deviation > 0 ? 'BUY_NO' : 'BUY_YES',
+          confidence: Math.min(volatility * 5, 0.7),
+          positionSize: 0.015,
+        })
+      }
+    }
+    
+    // 4. Scalp rapide: Petits mouvements fréquents
+    const previous = previousMarkets?.find(m => m.id === market.id)
+    if (previous) {
+      const change = yesPrice - previous.yesPrice
+      if (Math.abs(change) > 0.005 && volume24h > 5000) {
+        opportunities.push({
+          type: change > 0 ? 'SCALP_LONG' : 'SCALP_SHORT',
+          market,
+          signal: `⚡ Scalp ${change > 0 ? '+' : ''}${(change*100).toFixed(2)}%`,
+          expectedProfit: Math.abs(change) * 50,
+          action: change > 0 ? 'BUY_YES' : 'BUY_NO',
+          confidence: Math.min(Math.abs(change) * 10, 0.6),
+          positionSize: 0.01,
+        })
+      }
+    }
+    
+    // 5. High volume play: Marchés très actifs = opportunités
+    if (volume24h > 100000 && yesPrice > 0.25 && yesPrice < 0.75) {
       opportunities.push({
-        type: noChange < 0 ? 'SCALP_NO_DROP' : 'SCALP_NO_PUMP',
-        market: current,
-        signal: `NO ${noChange > 0 ? '+' : ''}${(noChange * 100).toFixed(1)}%`,
-        expectedProfit: Math.abs(noChange) * 30,
-        action: noChange < 0 ? 'BUY_NO' : 'BUY_YES',
-        confidence: Math.min(Math.abs(noChange) * 3, 0.9),
+        type: 'HIGH_VOL_PLAY',
+        market,
+        signal: `🔥 $${(volume24h/1000).toFixed(0)}k vol | YES ${(yesPrice*100).toFixed(0)}%`,
+        expectedProfit: 2 + Math.log10(volume24h) * 0.5,
+        action: yesPrice > 0.5 ? 'BUY_NO' : 'BUY_YES',
+        confidence: Math.min(volume24h / 200000, 0.75),
+        positionSize: 0.03,
       })
     }
   }
