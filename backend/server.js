@@ -56,13 +56,14 @@ async function initWallet() {
       const creds = await clobClient.createOrDeriveApiKey()
       console.log('Credentials recues:', JSON.stringify(creds).substring(0, 100))
       
-      if (creds && creds.apiKey) {
+      // Le SDK retourne key/secret/passphrase, pas apiKey
+      if (creds && (creds.key || creds.apiKey)) {
         clobClient.setCreds(creds)
-        console.log('API credentials configurees avec succes')
+        console.log('API credentials configurees avec succes:', creds.key || creds.apiKey)
       } else {
         console.log('Credentials invalides, tentative derive...')
         const derivedCreds = await clobClient.deriveApiKey()
-        if (derivedCreds && derivedCreds.apiKey) {
+        if (derivedCreds && (derivedCreds.key || derivedCreds.apiKey)) {
           clobClient.setCreds(derivedCreds)
           console.log('API credentials derivees avec succes')
         } else {
