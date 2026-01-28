@@ -57,6 +57,13 @@ export default function SettingsPanel({ botState, setBotState, onReset }) {
   }
 
   const applySettings = () => {
+    // En mode LIVE: ne PAS modifier le capital (c'est le wallet réel)
+    if (botState.mode === 'live') {
+      // Sauvegarder seulement les % et paramètres, pas le capital
+      localStorage.setItem('polybot_settings', JSON.stringify(settings))
+      return
+    }
+    // En mode PAPER: on peut modifier le capital
     setBotState(prev => ({
       ...prev,
       startingBalance: settings.startingBalance,
@@ -112,18 +119,26 @@ export default function SettingsPanel({ botState, setBotState, onReset }) {
       </div>
 
       <div className="space-y-4">
-        {/* Capital de départ */}
+        {/* Capital de départ - Désactivé en mode LIVE */}
         <div>
           <label className="flex items-center gap-2 text-xs text-hl-text-muted mb-1">
             <DollarSign className="w-3 h-3" />
-            Capital de départ (USDC)
+            {botState.mode === 'live' ? 'Capital LIVE (wallet réel)' : 'Capital de départ (USDC)'}
           </label>
           <input
             type="number"
-            value={settings.startingBalance}
+            value={botState.mode === 'live' ? botState.balance : settings.startingBalance}
             onChange={(e) => handleChange('startingBalance', parseFloat(e.target.value) || 0)}
-            className="w-full px-3 py-2 bg-hl-bg border border-hl-border rounded text-white text-sm focus:border-hl-green outline-none"
+            disabled={botState.mode === 'live'}
+            className={`w-full px-3 py-2 bg-hl-bg border border-hl-border rounded text-white text-sm outline-none ${
+              botState.mode === 'live' 
+                ? 'opacity-50 cursor-not-allowed' 
+                : 'focus:border-hl-green'
+            }`}
           />
+          {botState.mode === 'live' && (
+            <p className="text-xxs text-hl-text-muted mt-1">💰 Solde réel du wallet - non modifiable</p>
+          )}
         </div>
 
         {/* Taille position max */}
