@@ -105,8 +105,8 @@ export async function fetchMidpoints(tokenIds) {
   }
 }
 
-// Détecter les opportunités d'arbitrage
-export function detectArbitrageOpportunities(markets, threshold = 0.985) {
+// Détecter les opportunités d'arbitrage (seuils assouplis)
+export function detectArbitrageOpportunities(markets, threshold = 0.995) {
   const opportunities = []
   
   for (const market of markets) {
@@ -114,24 +114,24 @@ export function detectArbitrageOpportunities(markets, threshold = 0.985) {
     const noPrice = market.noPrice
     const sum = yesPrice + noPrice
     
-    // Arbitrage si YES + NO < threshold (sous-évalué) ou > 1.015 (sur-évalué)
-    if (sum < threshold) {
+    // Arbitrage si YES + NO != 100% (écart de prix)
+    if (sum < threshold && sum > 0.5) {
       opportunities.push({
         type: 'ARBITRAGE_UNDER',
         market: market,
-        signal: `YES+NO = ${(sum * 100).toFixed(1)}% < ${threshold * 100}%`,
+        signal: `YES+NO = ${(sum * 100).toFixed(1)}% (écart ${((1-sum) * 100).toFixed(1)}%)`,
         expectedProfit: (1 - sum) * 100,
         action: 'BUY_BOTH',
-        confidence: Math.min((threshold - sum) * 10, 1),
+        confidence: Math.min((threshold - sum) * 5, 1),
       })
-    } else if (sum > 1.015) {
+    } else if (sum > 1.005) {
       opportunities.push({
         type: 'ARBITRAGE_OVER',
         market: market,
-        signal: `YES+NO = ${(sum * 100).toFixed(1)}% > 101.5%`,
+        signal: `YES+NO = ${(sum * 100).toFixed(1)}% > 100.5%`,
         expectedProfit: (sum - 1) * 100,
         action: 'SELL_BOTH',
-        confidence: Math.min((sum - 1.015) * 10, 1),
+        confidence: Math.min((sum - 1.005) * 5, 1),
       })
     }
   }
@@ -139,32 +139,32 @@ export function detectArbitrageOpportunities(markets, threshold = 0.985) {
   return opportunities.sort((a, b) => b.expectedProfit - a.expectedProfit)
 }
 
-// Détecter les opportunités Low-Prob NO
-export function detectLowProbOpportunities(markets, threshold = 0.03) {
+// Détecter les opportunités Low-Prob (seuils assouplis)
+export function detectLowProbOpportunities(markets, threshold = 0.15) {
   const opportunities = []
   
   for (const market of markets) {
-    // YES très bas = opportunité de vendre NO (acheter YES)
+    // YES très bas = opportunité d'acheter NO (haute probabilité de gain)
     if (market.yesPrice <= threshold && market.yesPrice > 0.001) {
       opportunities.push({
         type: 'LOW_PROB_NO',
         market: market,
-        signal: `YES = ${(market.yesPrice * 100).toFixed(2)}% très bas`,
-        expectedProfit: market.noPrice * 100,
+        signal: `YES = ${(market.yesPrice * 100).toFixed(1)}% → BUY NO`,
+        expectedProfit: (1 - market.noPrice) * 100,
         action: 'BUY_NO',
-        confidence: Math.min((threshold - market.yesPrice) * 20, 1),
+        confidence: Math.min((threshold - market.yesPrice) * 5, 1),
       })
     }
     
-    // NO très bas = opportunité
+    // NO très bas = opportunité d'acheter YES
     if (market.noPrice <= threshold && market.noPrice > 0.001) {
       opportunities.push({
         type: 'LOW_PROB_YES',
         market: market,
-        signal: `NO = ${(market.noPrice * 100).toFixed(2)}% très bas`,
-        expectedProfit: market.yesPrice * 100,
+        signal: `NO = ${(market.noPrice * 100).toFixed(1)}% → BUY YES`,
+        expectedProfit: (1 - market.yesPrice) * 100,
         action: 'BUY_YES',
-        confidence: Math.min((threshold - market.noPrice) * 20, 1),
+        confidence: Math.min((threshold - market.noPrice) * 5, 1),
       })
     }
   }
@@ -172,11 +172,27 @@ export function detectLowProbOpportunities(markets, threshold = 0.03) {
   return opportunities.sort((a, b) => b.confidence - a.confidence)
 }
 
-// Détecter les opportunités de scalping (changements rapides)
-export function detectScalpingOpportunities(currentMarkets, previousMarkets, dropThreshold = 0.05) {
+// Détecter les opportunités de scalping + momentum
+export function detectScalpingOpportunities(currentMarkets, previousMarkets, dropThreshold = 0.01) {
   const opportunities = []
   
-  if (!previousMarkets || previousMarkets.length === 0) return opportunities
+  // Si pas de previous, utiliser le volume comme signal
+  if (!previousMarkets || previousMarkets.length === 0) {
+    // Stratégie volume: marchés avec fort volume = opportunités
+    for (const market of currentMarkets) {
+      if (market.volume24h > 10000 && market.yesPrice > 0.3 && market.yesPrice < 0.7) {
+        opportunities.push({
+          type: 'VOLUME_PLAY',
+          market: market,
+          signal: `Vol 24h: $${(market.volume24h/1000).toFixed(0)}k | YES ${(market.yesPrice*100).toFixed(0)}%`,
+          expectedProfit: 2 + Math.random() * 3,
+          action: market.yesPrice > 0.5 ? 'BUY_NO' : 'BUY_YES',
+          confidence: Math.min(market.volume24h / 100000, 0.8),
+        })
+      }
+    }
+    return opportunities.slice(0, 5)
+  }
   
   for (const current of currentMarkets) {
     const previous = previousMarkets.find(m => m.id === current.id)
@@ -185,27 +201,26 @@ export function detectScalpingOpportunities(currentMarkets, previousMarkets, dro
     const yesChange = current.yesPrice - previous.yesPrice
     const noChange = current.noPrice - previous.noPrice
     
-    // Drop significatif sur YES = opportunité d'achat
-    if (yesChange < -dropThreshold) {
+    // Tout changement de prix = opportunité potentielle
+    if (Math.abs(yesChange) > dropThreshold) {
       opportunities.push({
-        type: 'SCALP_YES_DROP',
+        type: yesChange < 0 ? 'SCALP_YES_DROP' : 'SCALP_YES_PUMP',
         market: current,
-        signal: `YES dropped ${(yesChange * 100).toFixed(1)}%`,
-        expectedProfit: Math.abs(yesChange) * 50,
-        action: 'BUY_YES',
-        confidence: Math.min(Math.abs(yesChange) * 5, 1),
+        signal: `YES ${yesChange > 0 ? '+' : ''}${(yesChange * 100).toFixed(1)}%`,
+        expectedProfit: Math.abs(yesChange) * 30,
+        action: yesChange < 0 ? 'BUY_YES' : 'BUY_NO',
+        confidence: Math.min(Math.abs(yesChange) * 3, 0.9),
       })
     }
     
-    // Drop significatif sur NO
-    if (noChange < -dropThreshold) {
+    if (Math.abs(noChange) > dropThreshold) {
       opportunities.push({
-        type: 'SCALP_NO_DROP',
+        type: noChange < 0 ? 'SCALP_NO_DROP' : 'SCALP_NO_PUMP',
         market: current,
-        signal: `NO dropped ${(noChange * 100).toFixed(1)}%`,
-        expectedProfit: Math.abs(noChange) * 50,
-        action: 'BUY_NO',
-        confidence: Math.min(Math.abs(noChange) * 5, 1),
+        signal: `NO ${noChange > 0 ? '+' : ''}${(noChange * 100).toFixed(1)}%`,
+        expectedProfit: Math.abs(noChange) * 30,
+        action: noChange < 0 ? 'BUY_NO' : 'BUY_YES',
+        confidence: Math.min(Math.abs(noChange) * 3, 0.9),
       })
     }
   }
