@@ -535,11 +535,13 @@ function App() {
     return () => clearInterval(statusInterval)
   }, [botState.status, botState.todayPnl, botState.balance, openPositions])
 
-  // PERSISTANCE SUPABASE - Sauvegarder toutes les 30 sec
+  // PERSISTANCE SUPABASE - Charger UNE SEULE FOIS au démarrage
+  const supabaseLoadedRef = useRef(false)
   useEffect(() => {
-    const userId = localStorage.getItem('polybot_user_id') || 'default'
+    if (supabaseLoadedRef.current) return
+    supabaseLoadedRef.current = true
     
-    // Charger l'état au démarrage
+    const userId = localStorage.getItem('polybot_user_id') || 'default'
     loadBotState(userId).then(data => {
       if (data) {
         console.log('📥 État chargé depuis Supabase')
@@ -548,16 +550,27 @@ function App() {
         if (data.trades) setTrades(data.trades)
       }
     })
+  }, [])
+  
+  // Sauvegarder périodiquement (séparé du chargement)
+  const botStateRef = useRef(botState)
+  const openPositionsRef2 = useRef(openPositions)
+  const tradesRef = useRef(trades)
+  
+  useEffect(() => { botStateRef.current = botState }, [botState])
+  useEffect(() => { openPositionsRef2.current = openPositions }, [openPositions])
+  useEffect(() => { tradesRef.current = trades }, [trades])
+  
+  useEffect(() => {
+    const userId = localStorage.getItem('polybot_user_id') || 'default'
     
-    // Sauvegarder périodiquement
     const saveInterval = setInterval(() => {
-      saveBotState(userId, botState, openPositions, trades)
+      saveBotState(userId, botStateRef.current, openPositionsRef2.current, tradesRef.current)
       console.log('💾 État sauvegardé dans Supabase')
-    }, 30000) // 30 secondes
+    }, 30000)
     
-    // Sauvegarder avant de quitter la page
     const handleBeforeUnload = () => {
-      saveBotState(userId, botState, openPositions, trades)
+      saveBotState(userId, botStateRef.current, openPositionsRef2.current, tradesRef.current)
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     
@@ -565,7 +578,7 @@ function App() {
       clearInterval(saveInterval)
       window.removeEventListener('beforeunload', handleBeforeUnload)
     }
-  }, [botState, openPositions, trades])
+  }, [])
 
   const toggleBot = () => {
     setBotState(prev => ({
