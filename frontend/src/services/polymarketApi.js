@@ -137,29 +137,65 @@ export async function fetchMarketDetails(conditionId) {
 }
 
 // Récupérer l'orderbook CLOB pour un token (via proxy)
+// RETOURNE LES VRAIS PRIX BID/ASK COMME EN TRADING RÉEL
 export async function fetchOrderbook(tokenId) {
   try {
     const response = await fetch(`${API_URL}/api/orderbook?token_id=${tokenId}`)
     
     if (!response.ok) {
       console.warn('Orderbook non disponible')
-      return { bids: [], asks: [] }
+      return { bids: [], asks: [], bestBid: null, bestAsk: null, spread: null }
     }
     
     const data = await response.json()
+    
+    // Trier les bids (du plus haut au plus bas) et asks (du plus bas au plus haut)
+    const sortedBids = (data.bids || []).sort((a, b) => parseFloat(b.price) - parseFloat(a.price))
+    const sortedAsks = (data.asks || []).sort((a, b) => parseFloat(a.price) - parseFloat(b.price))
+    
+    const bestBid = sortedBids[0] ? parseFloat(sortedBids[0].price) : null
+    const bestAsk = sortedAsks[0] ? parseFloat(sortedAsks[0].price) : null
+    const spread = bestBid && bestAsk ? bestAsk - bestBid : null
+    
     return {
-      bids: data.bids || [],
-      asks: data.asks || [],
-      // Calculer le meilleur bid/ask
-      bestBid: data.bids?.[0]?.price || null,
-      bestAsk: data.asks?.[0]?.price || null,
-      spread: data.asks?.[0]?.price && data.bids?.[0]?.price 
-        ? parseFloat(data.asks[0].price) - parseFloat(data.bids[0].price)
-        : null
+      bids: sortedBids,
+      asks: sortedAsks,
+      bestBid,  // Prix auquel on peut VENDRE (le plus haut acheteur)
+      bestAsk,  // Prix auquel on peut ACHETER (le plus bas vendeur)
+      spread,   // Différence entre ask et bid
+      midPrice: bestBid && bestAsk ? (bestBid + bestAsk) / 2 : null
     }
   } catch (error) {
     console.warn('Orderbook non disponible:', error)
-    return { bids: [], asks: [] }
+    return { bids: [], asks: [], bestBid: null, bestAsk: null, spread: null }
+  }
+}
+
+// Récupérer les vrais prix BID/ASK pour un marché
+export async function fetchRealPrices(market) {
+  try {
+    // Polymarket a 2 tokens par marché: YES et NO
+    const yesTokenId = market.clobTokenIds?.[0] || market.tokens?.[0]?.token_id
+    const noTokenId = market.clobTokenIds?.[1] || market.tokens?.[1]?.token_id
+    
+    if (!yesTokenId) {
+      return { yesBid: null, yesAsk: null, noBid: null, noAsk: null }
+    }
+    
+    const yesOrderbook = await fetchOrderbook(yesTokenId)
+    
+    return {
+      yesBid: yesOrderbook.bestBid,   // Prix pour VENDRE YES
+      yesAsk: yesOrderbook.bestAsk,   // Prix pour ACHETER YES
+      yesSpread: yesOrderbook.spread,
+      yesMid: yesOrderbook.midPrice,
+      // NO = inverse de YES dans un marché binaire
+      noBid: yesOrderbook.bestAsk ? 1 - yesOrderbook.bestAsk : null,
+      noAsk: yesOrderbook.bestBid ? 1 - yesOrderbook.bestBid : null,
+    }
+  } catch (error) {
+    console.warn('Erreur fetch real prices:', error)
+    return { yesBid: null, yesAsk: null, noBid: null, noAsk: null }
   }
 }
 
@@ -504,6 +540,7 @@ export default {
   fetchMarkets,
   fetchMarketDetails,
   fetchOrderbook,
+  fetchRealPrices,
   fetchMidpoint,
   fetchPrice,
   fetchSpreads,

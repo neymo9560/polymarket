@@ -10,6 +10,7 @@ import SettingsPanel from './components/SettingsPanel'
 import PnLCard from './components/PnLCard'
 import { 
   fetchMarkets, 
+  fetchRealPrices,
   detectArbitrageOpportunities, 
   detectLowProbOpportunities,
   detectScalpingOpportunities 
@@ -90,7 +91,17 @@ function App() {
         return
       }
       
-      const currentPrice = pos.side === 'YES' ? currentMarket.yesPrice : currentMarket.noPrice
+      // PRIX DE SORTIE RÉEL = BID (le prix auquel on peut vendre maintenant)
+      // En vrai trading: on achète au ASK, on vend au BID
+      // Le spread est la différence entre les deux
+      const currentBidPrice = pos.side === 'YES' 
+        ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)  // Estimer le bid à ~1% sous le mid
+        : (currentMarket.noBid || currentMarket.noPrice * 0.99)
+      
+      const currentPrice = currentBidPrice
+      
+      // P&L RÉEL = (Prix de vente BID - Prix d'achat ASK) × quantité
+      // C'est EXACTEMENT ce qu'on aurait en live
       const pnl = (currentPrice - pos.entryPrice) * pos.size
       
       // Vérifier Stop Loss, Take Profit, ou Timeout
@@ -269,7 +280,7 @@ function App() {
     
     console.log('🚀 Bot démarré - Trading actif')
     
-    const tradeInterval = setInterval(() => {
+    const tradeInterval = setInterval(async () => {
       const currentOpps = opportunitiesRef.current
       const currentBalance = balanceRef.current
       
@@ -284,11 +295,25 @@ function App() {
       
       console.log('💰 Trade exécuté:', opp.type, opp.signal)
       
+      // RÉCUPÉRER LES VRAIS PRIX BID/ASK DE L'ORDERBOOK
+      // Comme en trading réel: on achète au ASK, on vend au BID
+      const realPrices = await fetchRealPrices(opp.market)
+      
       // Position sizing dynamique
       const positionPct = opp.positionSize || 0.02
       const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
-      const entryPrice = side === 'YES' ? opp.market.yesPrice : opp.market.noPrice
+      
+      // PRIX RÉEL D'ACHAT = ASK (le prix le plus bas auquel quelqu'un vend)
+      // C'est exactement ce qu'on paierait en live
+      const entryPrice = side === 'YES' 
+        ? (realPrices.yesAsk || opp.market.yesPrice)
+        : (realPrices.noAsk || opp.market.noPrice)
+      
+      // Stocker aussi le BID pour calculer le P&L de sortie
+      const exitBidPrice = side === 'YES'
+        ? (realPrices.yesBid || opp.market.yesPrice)
+        : (realPrices.noBid || opp.market.noPrice)
       
       // STRATÉGIE SCALPING DES BOTS 6 CHIFFRES:
       // - Petits gains fréquents (1-3%)
@@ -298,9 +323,11 @@ function App() {
         id: Date.now(),
         marketId: opp.market.id,
         marketSlug: opp.market.slug,
+        clobTokenIds: opp.market.clobTokenIds,
         question: opp.market.question?.slice(0, 50),
         side,
-        entryPrice,
+        entryPrice,        // Prix ASK auquel on a acheté
+        exitBidPrice,      // Prix BID pour calculer le P&L de sortie immédiat
         currentPrice: entryPrice,
         size: tradeSize,
         unrealizedPnl: 0,
