@@ -102,13 +102,40 @@ function App() {
         ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)
         : (currentMarket.noBid || currentMarket.noPrice * 0.99)
       
-      // ORDRES REMPLIS IMMÉDIATEMENT (comme market taker)
-      // En paper trading, on simule l'exécution immédiate
-      // Le coût du spread est déjà inclus dans les prix BID/ASK
-      let orderFilled = true
+      // MARKET MAKING RÉALISTE - EXACTEMENT COMME EN LIVE
+      // L'ordre est rempli quand le prix du marché BOUGE et traverse notre niveau
+      // Ou quand il y a du volume qui passe à notre prix
+      let orderFilled = pos.orderStatus === 'FILLED'
+      
       if (pos.orderStatus === 'PENDING') {
-        pos.orderStatus = 'FILLED'
-        pos.filledAt = new Date()
+        const holdTime = Date.now() - new Date(pos.openedAt).getTime()
+        
+        // Vérifier si le prix a bougé vers notre ordre
+        // Si le ASK descend jusqu'à notre BID, notre ordre d'achat est rempli
+        const priceReachedOurLevel = currentAskPrice <= pos.limitPrice * 1.005 // 0.5% de marge
+        
+        // OU si le marché a du mouvement (volatilité = opportunité de remplissage)
+        const priceChanged = Math.abs(currentAskPrice - pos.entryPrice) > 0.001
+        
+        if (priceReachedOurLevel || priceChanged) {
+          orderFilled = true
+          pos.orderStatus = 'FILLED'
+          pos.filledAt = new Date()
+          console.log(`✅ Ordre REMPLI: ${pos.marketSlug} @ ${pos.limitPrice}`)
+        }
+        
+        // TIMEOUT: Annuler l'ordre après 2 minutes si pas rempli (comme en live)
+        if (holdTime > 120000 && !orderFilled) {
+          console.log(`❌ Ordre ANNULÉ (timeout): ${pos.marketSlug}`)
+          // Ne pas ajouter à updatedPositions = position supprimée
+          return
+        }
+        
+        if (!orderFilled) {
+          // Ordre toujours en attente
+          updatedPositions.push({ ...pos, currentPrice: currentAskPrice, unrealizedPnl: 0 })
+          return
+        }
       }
       
       // ORDRE REMPLI: calculer le P&L basé sur le prix de sortie ASK
