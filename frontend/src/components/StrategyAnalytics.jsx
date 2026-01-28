@@ -52,8 +52,9 @@ function StrategyAnalytics({ trades, openPositions }) {
         }
       }
       
-      if (trade.status === 'CLOSED' || trade.profit !== null) {
-        stats[code].totalTrades++
+      stats[code].totalTrades++
+      
+      if (trade.status === 'CLOSED' && trade.profit !== null) {
         const profit = parseFloat(trade.profit) || 0
         stats[code].totalPnl += profit
         
@@ -61,7 +62,13 @@ function StrategyAnalytics({ trades, openPositions }) {
           stats[code].wins++
         } else if (profit < 0) {
           stats[code].losses++
+        } else {
+          // profit === 0 (breakeven)
+          stats[code].other = (stats[code].other || 0) + 1
         }
+      } else {
+        // Trades non fermés ou annulés
+        stats[code].other = (stats[code].other || 0) + 1
       }
     })
     
@@ -94,13 +101,16 @@ function StrategyAnalytics({ trades, openPositions }) {
       trades: acc.trades + s.totalTrades,
       wins: acc.wins + s.wins,
       losses: acc.losses + s.losses,
+      other: acc.other + (s.other || 0),
       pnl: acc.pnl + s.totalPnl,
       openPositions: acc.openPositions + s.openPositions,
       unrealizedPnl: acc.unrealizedPnl + s.unrealizedPnl,
-    }), { trades: 0, wins: 0, losses: 0, pnl: 0, openPositions: 0, unrealizedPnl: 0 })
+    }), { trades: 0, wins: 0, losses: 0, other: 0, pnl: 0, openPositions: 0, unrealizedPnl: 0 })
   }, [strategyStats])
 
-  const globalWinRate = totals.trades > 0 ? (totals.wins / totals.trades) * 100 : 0
+  // Win rate basé sur les trades résolus (wins + losses), pas les "autres"
+  const resolvedTrades = totals.wins + totals.losses
+  const globalWinRate = resolvedTrades > 0 ? (totals.wins / resolvedTrades) * 100 : 0
 
   return (
     <div className="bg-hl-card border border-hl-border rounded-lg p-4">
@@ -112,8 +122,15 @@ function StrategyAnalytics({ trades, openPositions }) {
       <div className="bg-gradient-to-r from-hl-purple/20 to-hl-green/10 p-3 rounded-lg mb-4 border border-hl-purple/30">
         <div className="grid grid-cols-4 gap-2 text-center text-xs">
           <div>
-            <p className="text-hl-text-muted">Total Trades</p>
-            <p className="text-white font-bold text-lg">{totals.trades}</p>
+            <p className="text-hl-text-muted">W / L / ∅</p>
+            <p className="font-bold">
+              <span className="text-hl-green">{totals.wins}</span>
+              <span className="text-hl-text-muted"> / </span>
+              <span className="text-hl-red">{totals.losses}</span>
+              <span className="text-hl-text-muted"> / </span>
+              <span className="text-hl-text-muted">{totals.other}</span>
+            </p>
+            <p className="text-xxs text-hl-text-muted mt-0.5">∅ = 0$ ou annulé</p>
           </div>
           <div>
             <p className="text-hl-text-muted">Win Rate</p>
@@ -165,11 +182,13 @@ function StrategyAnalytics({ trades, openPositions }) {
                   <p className="text-white font-mono">{strategy.totalTrades}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-hl-text-muted">W / L</p>
-                  <p className="font-mono">
+                  <p className="text-hl-text-muted">W / L / ∅</p>
+                  <p className="font-mono text-xs">
                     <span className="text-hl-green">{strategy.wins}</span>
                     <span className="text-hl-text-muted"> / </span>
                     <span className="text-hl-red">{strategy.losses}</span>
+                    <span className="text-hl-text-muted"> / </span>
+                    <span className="text-hl-text-muted">{strategy.other || 0}</span>
                   </p>
                 </div>
                 <div className="text-center">
