@@ -339,9 +339,9 @@ function App() {
       allOpportunities.push(...scalpOpps.filter(o => o.type !== 'MARKET_MAKING'))
     }
     
-    // Stratégie D: Market Making
+    // Stratégie D: Market Making (dans detectArbitrageOpportunities)
     if (botState.activeStrategies.includes('D')) {
-      const mmOpps = detectScalpingOpportunities(markets, previousMarkets)
+      const mmOpps = detectArbitrageOpportunities(markets)
       // Filtrer pour ne garder que le Market Making
       allOpportunities.push(...mmOpps.filter(o => o.type === 'MARKET_MAKING'))
     }
