@@ -104,20 +104,37 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    // Simple et direct avec ethers
-    const usdcBalance = await usdc.balanceOf(wallet.address)
-    const maticBalance = await provider.getBalance(wallet.address)
+    let usdcBalance = 0
+    let maticBalance = 0
     
-    const usdcFormatted = parseFloat(ethers.utils.formatUnits(usdcBalance, 6))
-    const maticFormatted = parseFloat(ethers.utils.formatEther(maticBalance))
+    // Essayer de récupérer le solde Polymarket (proxy wallet)
+    if (clobClient) {
+      try {
+        const balanceData = await clobClient.getBalanceAllowance({ asset_type: 'USDC' })
+        console.log('Polymarket balance data:', balanceData)
+        if (balanceData && balanceData.balance) {
+          usdcBalance = parseFloat(balanceData.balance) / 1e6
+        }
+      } catch (e) {
+        console.log('Erreur balance Polymarket:', e.message)
+      }
+    }
     
-    console.log('Wallet:', wallet.address, 'USDC:', usdcFormatted, 'MATIC:', maticFormatted)
+    // MATIC pour gas (toujours sur le wallet principal)
+    try {
+      const maticRaw = await provider.getBalance(wallet.address)
+      maticBalance = parseFloat(ethers.utils.formatEther(maticRaw))
+    } catch (e) {
+      console.log('Erreur MATIC balance:', e.message)
+    }
+    
+    console.log('Wallet:', wallet.address, 'USDC (Polymarket):', usdcBalance, 'MATIC:', maticBalance)
     
     res.json({
       address: wallet.address,
-      usdcBalance: usdcFormatted,
-      maticBalance: maticFormatted,
-      hasGas: maticFormatted > 0.001
+      usdcBalance,
+      maticBalance,
+      hasGas: maticBalance > 0.001
     })
   } catch (error) {
     console.log('Erreur wallet:', error.message)
