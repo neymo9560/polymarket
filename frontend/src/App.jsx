@@ -687,24 +687,39 @@ function App() {
     const newMode = botState.mode === 'paper' ? 'live' : 'paper'
     
     if (newMode === 'live') {
-      // En mode LIVE: utiliser le vrai solde du wallet
-      if (backendConnected) {
-        const walletInfo = await getWalletInfo()
-        if (walletInfo) {
-          setLiveWalletInfo(walletInfo)
-          setBotState(prev => ({
-            ...prev,
-            mode: 'live',
-            balance: walletInfo.usdcBalance,
-            startingBalance: walletInfo.usdcBalance
-          }))
-          console.log(`💰 Mode LIVE: Solde réel = ${walletInfo.usdcBalance} USDC`)
-          return
+      // En mode LIVE: essayer de récupérer le vrai solde du wallet
+      try {
+        if (backendConnected) {
+          const walletInfo = await getWalletInfo()
+          if (walletInfo) {
+            setLiveWalletInfo(walletInfo)
+            setBotState(prev => ({
+              ...prev,
+              mode: 'live',
+              balance: walletInfo.usdcBalance,
+              startingBalance: walletInfo.usdcBalance
+            }))
+            console.log(`💰 Mode LIVE: Solde réel = ${walletInfo.usdcBalance} USDC`)
+            return
+          }
         }
+        // Backend non connecté - passer en mode LIVE avec solde 0
+        console.warn('⚠️ Backend non connecté - Mode LIVE avec solde 0')
+        setBotState(prev => ({
+          ...prev,
+          mode: 'live',
+          balance: 0,
+          startingBalance: 0
+        }))
+      } catch (error) {
+        console.error('❌ Erreur connexion backend:', error)
+        setBotState(prev => ({
+          ...prev,
+          mode: 'live',
+          balance: 0,
+          startingBalance: 0
+        }))
       }
-      // Backend non connecté
-      console.error('❌ Backend non connecté - impossible de passer en mode LIVE')
-      return
     } else {
       // Retour en mode PAPER: restaurer le solde paper
       const savedState = localStorage.getItem('polybot_state')
