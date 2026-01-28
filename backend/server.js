@@ -13,7 +13,7 @@ app.use(cors())
 app.use(express.json())
 
 // Config
-const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com'
+const POLYGON_RPC = 'https://polygon.meowrpc.com'
 const CLOB_HOST = 'https://clob.polymarket.com'
 const CHAIN_ID = 137
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
@@ -104,47 +104,20 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    const address = wallet.address.toLowerCase()
+    // Simple et direct avec ethers
+    const usdcBalance = await usdc.balanceOf(wallet.address)
+    const maticBalance = await provider.getBalance(wallet.address)
     
-    // Appel JSON-RPC direct pour MATIC
-    const maticCall = {
-      jsonrpc: '2.0',
-      method: 'eth_getBalance',
-      params: [address, 'latest'],
-      id: 1
-    }
+    const usdcFormatted = parseFloat(ethers.utils.formatUnits(usdcBalance, 6))
+    const maticFormatted = parseFloat(ethers.utils.formatEther(maticBalance))
     
-    // Appel JSON-RPC direct pour USDC (balanceOf)
-    const balanceOfData = '0x70a08231000000000000000000000000' + address.slice(2)
-    const usdcCall = {
-      jsonrpc: '2.0',
-      method: 'eth_call',
-      params: [{ to: USDC_ADDRESS, data: balanceOfData }, 'latest'],
-      id: 2
-    }
-    
-    const rpc = 'https://polygon-mainnet.infura.io/v3/84842078b09946638c03157f83405213'
-    
-    const [maticRes, usdcRes] = await Promise.all([
-      fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(maticCall) }),
-      fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(usdcCall) })
-    ])
-    
-    const maticData = await maticRes.json()
-    const usdcData = await usdcRes.json()
-    
-    console.log('RPC responses:', { maticData, usdcData })
-    
-    const maticBalance = maticData.result ? parseInt(maticData.result, 16) / 1e18 : 0
-    const usdcBalance = usdcData.result ? parseInt(usdcData.result, 16) / 1e6 : 0
-    
-    console.log('Wallet balances:', { address, usdcBalance, maticBalance })
+    console.log('Wallet:', wallet.address, 'USDC:', usdcFormatted, 'MATIC:', maticFormatted)
     
     res.json({
       address: wallet.address,
-      usdcBalance,
-      maticBalance,
-      hasGas: maticBalance > 0.001
+      usdcBalance: usdcFormatted,
+      maticBalance: maticFormatted,
+      hasGas: maticFormatted > 0.001
     })
   } catch (error) {
     console.log('Erreur wallet:', error.message)

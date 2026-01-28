@@ -3,8 +3,8 @@
  * La clé privée est sur le serveur, pas ici!
  */
 
-// Backend Fly.io (Frankfurt)
-const BACKEND_URL = 'https://polybot-backend-live.fly.dev'
+// Backend Render (fonctionnait pour le solde)
+const BACKEND_URL = 'https://polybot-backend.onrender.com'
 
 // Health check
 export async function checkBackendHealth() {
