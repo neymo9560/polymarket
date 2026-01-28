@@ -64,13 +64,15 @@ export default function ControlPanel({ botState, toggleBot, toggleMode, isAdmin 
           </div>
         </button>
 
-        {/* Arrêt d'urgence */}
-        <button
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded bg-hl-red bg-opacity-20 border border-hl-red text-hl-red hover:bg-opacity-30 transition-all font-medium"
-        >
-          <AlertTriangle className="w-4 h-4" />
-          <span>ARRÊT D'URGENCE</span>
-        </button>
+        {/* Arrêt d'urgence - Admin seulement */}
+        {isAdmin && (
+          <button
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded bg-hl-red bg-opacity-20 border border-hl-red text-hl-red hover:bg-opacity-30 transition-all font-medium"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            <span>ARRÊT D'URGENCE</span>
+          </button>
+        )}
 
         {/* Infos stratégies actives */}
         <div className="pt-3 border-t border-hl-border">
