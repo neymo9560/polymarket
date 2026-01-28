@@ -295,7 +295,7 @@ function App() {
       allOpportunities.push(...scalpOpps)
     }
     
-    setOpportunities(allOpportunities.slice(0, 10))
+    setOpportunities(allOpportunities.slice(0, 50)) // 50 opportunités pour trader sur plus de marchés
   }, [markets, previousMarkets, botState.activeStrategies])
 
   // Ref pour éviter les re-renders qui reset l'interval
@@ -325,23 +325,10 @@ function App() {
     const tradeInterval = setInterval(async () => {
       const currentOpps = opportunitiesRef.current
       const currentBalance = balanceRef.current
+      const currentPositions = openPositionsRef.current
       
       if (!currentOpps || currentOpps.length === 0) {
         console.log('⏳ En attente d\'opportunités...')
-        return
-      }
-      
-      // Prendre la meilleure opportunité disponible
-      const opp = currentOpps[0]
-      if (!opp) return
-      
-      // UTILISER LE REF POUR AVOIR LES POSITIONS À JOUR
-      const currentPositions = openPositionsRef.current
-      
-      // ÉVITER LES DOUBLONS: ne pas ouvrir si on a déjà une position sur ce marché
-      const existingPosition = currentPositions.find(p => p.marketId === opp.market.id)
-      if (existingPosition) {
-        console.log('⏭️ Position déjà ouverte sur ce marché, on passe')
         return
       }
       
@@ -349,6 +336,16 @@ function App() {
       const MAX_OPEN_POSITIONS = 25
       if (currentPositions.length >= MAX_OPEN_POSITIONS) {
         console.log(`⏸️ Max positions atteint (${MAX_OPEN_POSITIONS}), on attend`)
+        return
+      }
+      
+      // TROUVER LA PREMIÈRE OPPORTUNITÉ SUR UN MARCHÉ NON OUVERT
+      const opp = currentOpps.find(o => 
+        !currentPositions.some(p => p.marketId === o.market.id)
+      )
+      
+      if (!opp) {
+        console.log('⏭️ Toutes les opportunités ont déjà des positions ouvertes')
         return
       }
       
