@@ -11,8 +11,8 @@ const PORT = process.env.PORT || 3001
 app.use(cors())
 app.use(express.json())
 
-// Config Polygon - utiliser Alchemy ou autre RPC fiable
-const POLYGON_RPC = 'https://polygon-mainnet.g.alchemy.com/v2/demo'
+// Config Polygon - RPC rapide
+const POLYGON_RPC = 'https://rpc.ankr.com/polygon'
 const POLYMARKET_CLOB_URL = 'https://clob.polymarket.com'
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
 const CTF_EXCHANGE = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045'
