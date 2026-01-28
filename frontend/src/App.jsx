@@ -102,28 +102,13 @@ function App() {
         ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)
         : (currentMarket.noBid || currentMarket.noPrice * 0.99)
       
-      // VÉRIFIER SI L'ORDRE LIMIT A ÉTÉ REMPLI
-      // L'ordre d'achat au BID est rempli quand le prix ASK descend jusqu'à notre prix
-      // = quelqu'un a vendu à notre prix ou moins
-      let orderFilled = pos.orderStatus === 'FILLED'
-      
+      // ORDRES REMPLIS IMMÉDIATEMENT (comme market taker)
+      // En paper trading, on simule l'exécution immédiate
+      // Le coût du spread est déjà inclus dans les prix BID/ASK
+      let orderFilled = true
       if (pos.orderStatus === 'PENDING') {
-        // Notre ordre d'achat est rempli si le ASK actuel <= notre prix limit
-        // OU si le prix mid a traversé notre niveau
-        const midPrice = (currentAskPrice + currentBidPrice) / 2
-        if (currentAskPrice <= pos.limitPrice || midPrice <= pos.limitPrice) {
-          orderFilled = true
-          pos.orderStatus = 'FILLED'
-          pos.filledAt = new Date()
-          console.log(`✅ Ordre REMPLI au prix ${pos.limitPrice} (ASK actuel: ${currentAskPrice})`)
-        }
-      }
-      
-      // Si l'ordre n'est pas rempli, on ne calcule pas de P&L
-      if (!orderFilled) {
-        // L'ordre est toujours en attente dans l'orderbook
-        updatedPositions.push({ ...pos, currentPrice: currentAskPrice, unrealizedPnl: 0 })
-        return
+        pos.orderStatus = 'FILLED'
+        pos.filledAt = new Date()
       }
       
       // ORDRE REMPLI: calculer le P&L basé sur le prix de sortie ASK
