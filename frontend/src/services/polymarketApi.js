@@ -342,11 +342,26 @@ export function detectArbitrageOpportunities(markets) {
       opportunities.push({
         type: 'SPREAD_CAPTURE',
         market,
-        signal: `� Spread ${(spread*100).toFixed(2)}% | Liq $${(liquidity/1000).toFixed(0)}k`,
+        signal: `📊 Spread ${(spread*100).toFixed(2)}% | Liq $${(liquidity/1000).toFixed(0)}k`,
         expectedProfit: spread * 100,
         action: yesPrice < 0.5 ? 'BUY_YES' : 'BUY_NO',
         confidence: 0.75,
         positionSize: 0.03,
+      })
+    }
+    
+    // 4. MARKET MAKING SIMPLE - S'APPLIQUE À TOUS LES MARCHÉS
+    // Capturer le spread sur n'importe quel marché actif
+    if (volume24h > 1000) { // Critère minimal: juste du volume
+      const effectiveSpread = spread || 0.01 // Spread par défaut 1%
+      opportunities.push({
+        type: 'MARKET_MAKING',
+        market,
+        signal: `🔄 MM: ${market.slug?.slice(0,20)} | Spread ${(effectiveSpread*100).toFixed(1)}%`,
+        expectedProfit: effectiveSpread * 100,
+        action: yesPrice < 0.5 ? 'BUY_YES' : 'BUY_NO',
+        confidence: 0.70,
+        positionSize: 0.05,
       })
     }
   }
