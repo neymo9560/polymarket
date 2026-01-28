@@ -109,21 +109,21 @@ function App() {
     
     const allOpportunities = []
     
-    // Stratégie A: Arbitrage
+    // Stratégie A: Arbitrage (écart YES+NO < 99.5%)
     if (botState.activeStrategies.includes('A')) {
-      const arbOpps = detectArbitrageOpportunities(markets, 0.985)
+      const arbOpps = detectArbitrageOpportunities(markets)
       allOpportunities.push(...arbOpps)
     }
     
-    // Stratégie B: Low-Prob NO
+    // Stratégie B: Low-Prob (prix < 15%)
     if (botState.activeStrategies.includes('B')) {
-      const lowProbOpps = detectLowProbOpportunities(markets, 0.03)
+      const lowProbOpps = detectLowProbOpportunities(markets)
       allOpportunities.push(...lowProbOpps)
     }
     
-    // Stratégie C: Scalping
-    if (botState.activeStrategies.includes('C') && previousMarkets.length > 0) {
-      const scalpOpps = detectScalpingOpportunities(markets, previousMarkets, 0.05)
+    // Stratégie C: Scalping + Volume
+    if (botState.activeStrategies.includes('C')) {
+      const scalpOpps = detectScalpingOpportunities(markets, previousMarkets)
       allOpportunities.push(...scalpOpps)
     }
     
