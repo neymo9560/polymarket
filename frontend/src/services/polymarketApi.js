@@ -23,35 +23,43 @@ export async function fetchMarkets(limit = 50) {
     return data.map(market => {
       const id = market.conditionId || market.id
       
-      // Parser les prix - Polymarket peut retourner string ou array
+      // Parser les prix - Format Polymarket: "[\"0.45\",\"0.55\"]" (string JSON)
       let yesPrice = 0.5
       let noPrice = 0.5
       
-      if (market.outcomePrices) {
-        // Format: "[\"0.45\",\"0.55\"]" ou ["0.45","0.55"] ou {0: "0.45", 1: "0.55"}
-        try {
+      try {
+        if (market.outcomePrices) {
           let prices = market.outcomePrices
+          // Si c'est un string, parser le JSON
           if (typeof prices === 'string') {
             prices = JSON.parse(prices)
           }
-          if (Array.isArray(prices)) {
-            yesPrice = parseFloat(prices[0]) || 0.5
-            noPrice = parseFloat(prices[1]) || 0.5
+          // Maintenant c'est un array ["0.45", "0.55"]
+          if (Array.isArray(prices) && prices.length >= 2) {
+            const p0 = parseFloat(prices[0])
+            const p1 = parseFloat(prices[1])
+            if (!isNaN(p0) && p0 >= 0 && p0 <= 1) yesPrice = p0
+            if (!isNaN(p1) && p1 >= 0 && p1 <= 1) noPrice = p1
           }
-        } catch (e) {
-          console.warn('Error parsing outcomePrices:', market.outcomePrices)
         }
-      } else if (market.bestBid !== undefined) {
-        yesPrice = parseFloat(market.bestBid) || 0.5
-        noPrice = 1 - yesPrice
-      } else if (market.price !== undefined) {
-        yesPrice = parseFloat(market.price) || 0.5
-        noPrice = 1 - yesPrice
+        
+        // Fallback sur bestBid/bestAsk si disponibles
+        if (yesPrice === 0.5 && market.bestBid !== undefined) {
+          const bid = parseFloat(market.bestBid)
+          if (!isNaN(bid) && bid > 0 && bid < 1) {
+            yesPrice = bid
+            noPrice = 1 - bid
+          }
+        }
+      } catch (e) {
+        console.warn('Error parsing prices for market:', market.id, e)
       }
       
-      // S'assurer que les prix sont valides
-      if (isNaN(yesPrice) || yesPrice < 0 || yesPrice > 1) yesPrice = 0.5
-      if (isNaN(noPrice) || noPrice < 0 || noPrice > 1) noPrice = 0.5
+      // Validation finale - éviter 0 ou 1 exact
+      if (yesPrice <= 0.001) yesPrice = 0.01
+      if (yesPrice >= 0.999) yesPrice = 0.99
+      if (noPrice <= 0.001) noPrice = 0.01
+      if (noPrice >= 0.999) noPrice = 0.99
       
       // Sauvegarder l'historique des prix
       if (!priceHistory.has(id)) {
@@ -68,12 +76,15 @@ export async function fetchMarkets(limit = 50) {
         return isNaN(parsed) ? 0 : parsed
       }
       
+      // Récupérer le bon slug pour le lien (events[0].slug si disponible)
+      const eventSlug = market.events?.[0]?.slug || market.slug || market.market_slug
+      
       return {
         id,
-        slug: market.slug || market.market_slug || id,
+        slug: eventSlug,
         question: market.question || market.title || 'Unknown Market',
         description: market.description || '',
-        category: market.category || market.groupItemTitle || 'Other',
+        category: market.events?.[0]?.title || market.category || market.groupItemTitle || 'Other',
         
         // Prix YES/NO (déjà validés)
         yesPrice,
