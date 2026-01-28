@@ -49,16 +49,33 @@ async function initWallet() {
     // Initialiser le client CLOB avec le SDK officiel
     clobClient = new ClobClient(CLOB_HOST, CHAIN_ID, wallet)
     
-    // Créer/dériver les credentials API
+    // Créer/dériver les credentials API - OBLIGATOIRE pour les ordres
     try {
+      console.log('Creation des API credentials...')
       const creds = await clobClient.createOrDeriveApiCreds()
-      clobClient.setCreds(creds)
-      console.log('API credentials créées via SDK')
+      console.log('Credentials recues:', JSON.stringify(creds).substring(0, 100))
+      
+      if (creds && creds.key) {
+        clobClient.setCreds(creds)
+        console.log('API credentials configurees avec succes')
+      } else {
+        console.log('Credentials invalides, tentative derive...')
+        const derivedCreds = await clobClient.deriveApiKey()
+        if (derivedCreds && derivedCreds.key) {
+          clobClient.setCreds(derivedCreds)
+          console.log('API credentials derivees avec succes')
+        } else {
+          console.error('Impossible de creer des credentials API')
+          clobClient = null
+        }
+      }
     } catch (err) {
-      console.log('Erreur credentials:', err.message)
+      console.error('Erreur credentials:', err.message)
+      console.error('Stack:', err.stack)
+      clobClient = null
     }
     
-    return true
+    return clobClient !== null
   } catch (error) {
     console.log('Erreur wallet:', error.message)
     return false
