@@ -683,12 +683,39 @@ function App() {
     }))
   }
 
-  const toggleMode = () => {
-    setBotState(prev => ({
-      ...prev,
-      mode: prev.mode === 'paper' ? 'live' : 'paper',
-      balance: prev.mode === 'paper' ? prev.balance : 300.00
-    }))
+  const toggleMode = async () => {
+    const newMode = botState.mode === 'paper' ? 'live' : 'paper'
+    
+    if (newMode === 'live') {
+      // En mode LIVE: utiliser le vrai solde du wallet
+      if (backendConnected) {
+        const walletInfo = await getWalletInfo()
+        if (walletInfo) {
+          setLiveWalletInfo(walletInfo)
+          setBotState(prev => ({
+            ...prev,
+            mode: 'live',
+            balance: walletInfo.usdcBalance,
+            startingBalance: walletInfo.usdcBalance
+          }))
+          console.log(`💰 Mode LIVE: Solde réel = ${walletInfo.usdcBalance} USDC`)
+          return
+        }
+      }
+      // Backend non connecté
+      console.error('❌ Backend non connecté - impossible de passer en mode LIVE')
+      return
+    } else {
+      // Retour en mode PAPER: restaurer le solde paper
+      const savedState = localStorage.getItem('polybot_state')
+      const paperBalance = savedState ? JSON.parse(savedState).startingBalance || 100 : 100
+      setBotState(prev => ({
+        ...prev,
+        mode: 'paper',
+        balance: paperBalance,
+        startingBalance: paperBalance
+      }))
+    }
   }
 
   // Reset toutes les stats
