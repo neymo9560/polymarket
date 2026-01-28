@@ -330,6 +330,20 @@ function App() {
       const opp = currentOpps[0]
       if (!opp) return
       
+      // ÉVITER LES DOUBLONS: ne pas ouvrir si on a déjà une position sur ce marché
+      const existingPosition = openPositions.find(p => p.marketId === opp.market.id)
+      if (existingPosition) {
+        console.log('⏭️ Position déjà ouverte sur ce marché, on passe')
+        return
+      }
+      
+      // LIMITER LE NOMBRE DE POSITIONS SIMULTANÉES (comme les pros)
+      const MAX_OPEN_POSITIONS = 10
+      if (openPositions.length >= MAX_OPEN_POSITIONS) {
+        console.log(`⏸️ Max positions atteint (${MAX_OPEN_POSITIONS}), on attend`)
+        return
+      }
+      
       console.log('💰 Trade exécuté:', opp.type, opp.signal)
       
       // RÉCUPÉRER LES VRAIS PRIX BID/ASK DE L'ORDERBOOK
