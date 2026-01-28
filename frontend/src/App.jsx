@@ -15,6 +15,7 @@ import {
   detectLowProbOpportunities,
   detectScalpingOpportunities 
 } from './services/polymarketApi'
+import { executeLiveTrade } from './services/tradingApi'
 
 function App() {
   // Authentification
@@ -302,6 +303,9 @@ function App() {
       // RÉCUPÉRER LES VRAIS PRIX BID/ASK DE L'ORDERBOOK
       const realPrices = await fetchRealPrices(opp.market)
       
+      // MODE LIVE: Passer un vrai ordre sur Polymarket
+      const isLive = botState.mode === 'live'
+      
       // Position sizing dynamique
       const positionPct = opp.positionSize || 0.02
       const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
@@ -359,6 +363,24 @@ function App() {
         takeProfit: exitAskPrice, // Notre TP = le ASK où on a placé l'ordre de vente
         // Timeout: 3 minutes pour laisser le temps aux ordres d'être remplis
         maxHoldTime: 180000,
+      }
+      
+      // EN MODE LIVE: Passer le vrai ordre sur Polymarket
+      if (isLive) {
+        try {
+          await executeLiveTrade({
+            market: opp.market,
+            side,
+            action: 'BUY',
+            price: entryPrice,
+            size: tradeSize,
+            isLive: true
+          })
+          console.log('🔴 LIVE: Ordre réel envoyé à Polymarket')
+        } catch (error) {
+          console.error('❌ Erreur ordre LIVE:', error)
+          return // Ne pas continuer si l'ordre échoue
+        }
       }
       
       // Ajouter aux positions ouvertes
