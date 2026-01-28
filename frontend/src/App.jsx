@@ -105,29 +105,26 @@ function App() {
       const holdTime = Date.now() - new Date(pos.openedAt).getTime()
       const hitTimeout = holdTime > (pos.maxHoldTime || 10000)
       
-      // SIMULATION RÉALISTE DU SPREAD POLYMARKET
-      // Les vrais traders captent le spread bid/ask (0.5-2%)
-      // On simule ça avec une distribution réaliste basée sur la confidence
-      const spreadCapture = pos.size * (Math.random() * 0.025 - 0.008) // -0.8% à +1.7%
-      const marketNoise = pos.size * (Math.random() * 0.01 - 0.005) // ±0.5% bruit
+      // P&L RÉEL basé sur les vrais prix du marché
+      // Pas de simulation - juste la différence entre prix d'entrée et prix actuel
+      // En vrai trading: on achète au ASK et on vend au BID
+      // Le spread réel Polymarket est inclus dans les prix qu'on récupère
+      const realPnl = pnl // Différence réelle entre entry et current price
       
-      // P&L simulé = mouvement réel + spread capturé + bruit marché
-      const simulatedPnl = pnl + spreadCapture + marketNoise
-      
-      // Fermer si timeout ou si gain > 0.1%
-      const shouldClose = hitStopLoss || hitTakeProfit || hitTimeout || simulatedPnl > pos.size * 0.001
+      // Fermer si SL/TP atteint ou timeout
+      const shouldClose = hitStopLoss || hitTakeProfit || hitTimeout
       
       if (shouldClose) {
         let closeReason = 'TIMEOUT'
         if (hitTakeProfit) closeReason = 'TAKE_PROFIT ✅'
         else if (hitStopLoss) closeReason = 'STOP_LOSS ❌'
-        else if (simulatedPnl > 0) closeReason = 'SCALP_WIN 💰'
-        else closeReason = 'CLOSE 📊'
+        else if (realPnl > 0) closeReason = 'WIN 💰'
+        else closeReason = 'LOSS 📊'
         
         positionsToClose.push({
           ...pos,
           currentPrice,
-          realizedPnl: simulatedPnl,
+          realizedPnl: realPnl,
           closedAt: new Date(),
           closeReason
         })
