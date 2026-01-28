@@ -92,8 +92,7 @@ function App() {
         return
       }
       
-      // MARKET MAKING: On a acheté au BID, on vend au ASK
-      // Notre ordre de vente est placé au ASK et attend d'être rempli
+      // RÉCUPÉRER LES VRAIS PRIX DU MARCHÉ
       const currentAskPrice = pos.side === 'YES' 
         ? (currentMarket.yesAsk || currentMarket.yesPrice * 1.01)
         : (currentMarket.noAsk || currentMarket.noPrice * 1.01)
@@ -102,11 +101,32 @@ function App() {
         ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)
         : (currentMarket.noBid || currentMarket.noPrice * 0.99)
       
-      // Pour le market making: on vend au ASK (pas au BID!)
-      const currentPrice = pos.isMarketMaking ? currentAskPrice : currentBidPrice
+      // VÉRIFIER SI L'ORDRE LIMIT A ÉTÉ REMPLI
+      // L'ordre d'achat au BID est rempli quand le prix ASK descend jusqu'à notre prix
+      // = quelqu'un a vendu à notre prix ou moins
+      let orderFilled = pos.orderStatus === 'FILLED'
       
-      // P&L MARKET MAKING = (ASK sortie - BID entrée) × quantité
-      // = On CAPTE le spread au lieu de le payer!
+      if (pos.orderStatus === 'PENDING') {
+        // Notre ordre d'achat est rempli si le ASK actuel <= notre prix limit
+        // OU si le prix mid a traversé notre niveau
+        const midPrice = (currentAskPrice + currentBidPrice) / 2
+        if (currentAskPrice <= pos.limitPrice || midPrice <= pos.limitPrice) {
+          orderFilled = true
+          pos.orderStatus = 'FILLED'
+          pos.filledAt = new Date()
+          console.log(`✅ Ordre REMPLI au prix ${pos.limitPrice} (ASK actuel: ${currentAskPrice})`)
+        }
+      }
+      
+      // Si l'ordre n'est pas rempli, on ne calcule pas de P&L
+      if (!orderFilled) {
+        // L'ordre est toujours en attente dans l'orderbook
+        updatedPositions.push({ ...pos, currentPrice: currentAskPrice, unrealizedPnl: 0 })
+        return
+      }
+      
+      // ORDRE REMPLI: calculer le P&L basé sur le prix de sortie ASK
+      const currentPrice = currentAskPrice
       const pnl = (currentPrice - pos.entryPrice) * pos.size
       
       // Vérifier Stop Loss, Take Profit, ou Timeout
@@ -357,11 +377,14 @@ function App() {
         openedAt: new Date(),
         strategy: opp.type,
         signal: opp.signal,
-        isMarketMaking: true, // Flag pour indiquer qu'on fait du market making
-        // MARKET MAKING: pas de SL/TP classique, on attend juste que l'ordre soit rempli
-        stopLoss: entryPrice * (side === 'YES' ? 0.95 : 1.05), // -5% protection
-        takeProfit: exitAskPrice, // Notre TP = le ASK où on a placé l'ordre de vente
-        // Timeout: 3 minutes pour laisser le temps aux ordres d'être remplis
+        isMarketMaking: true,
+        // ORDRE LIMIT EN ATTENTE - pas encore rempli
+        // Sera rempli quand le vrai prix du marché atteint notre prix
+        orderStatus: 'PENDING', // PENDING → FILLED quand le marché atteint notre prix
+        limitPrice: entryPrice, // Prix auquel on a placé notre ordre
+        // Stop loss et take profit basés sur les vrais prix
+        stopLoss: entryPrice * (side === 'YES' ? 0.95 : 1.05),
+        takeProfit: exitAskPrice,
         maxHoldTime: 180000,
       }
       
