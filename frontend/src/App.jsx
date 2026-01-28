@@ -157,10 +157,16 @@ function App() {
       const hitTimeout = holdTime > (pos.maxHoldTime || 10000)
       
       // P&L RÉEL basé sur les vrais prix du marché
-      // Pas de simulation - juste la différence entre prix d'entrée et prix actuel
-      // En vrai trading: on achète au ASK et on vend au BID
-      // Le spread réel Polymarket est inclus dans les prix qu'on récupère
-      const realPnl = pnl // Différence réelle entre entry et current price
+      // FRAIS POLYMARKET SIMULÉS (comme en live):
+      // - 2% sur les gains uniquement (pas sur les pertes)
+      // - Frais de trading ~0.5% par transaction
+      const POLYMARKET_FEE = 0.02 // 2% sur les gains
+      const TRADING_FEE = 0.005 // 0.5% par trade (entrée + sortie = 1%)
+      
+      const grossPnl = pnl
+      const tradingFees = pos.size * TRADING_FEE * 2 // Entrée + sortie
+      const profitFee = grossPnl > 0 ? grossPnl * POLYMARKET_FEE : 0
+      const realPnl = grossPnl - tradingFees - profitFee
       
       // Fermer si SL/TP atteint ou timeout
       const shouldClose = hitStopLoss || hitTakeProfit || hitTimeout
