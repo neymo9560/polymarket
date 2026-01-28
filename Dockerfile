@@ -26,4 +26,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["polymarket-bot", "--mode", "paper"]
+CMD ["polymarket-bot"]

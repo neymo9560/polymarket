@@ -1,43 +1,73 @@
-use anyhow::Result;
-use clap::Parser;
-use polymarket_hft_bot::{bot::PolymarketBot, ui::PolymarketUI};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tracing::{info, error};
+use axum::{
+    routing::get,
+    Router,
+    Json,
+    http::Method,
+};
+use tower_http::cors::{CorsLayer, Any};
+use serde::{Deserialize, Serialize};
+use std::env;
+use tracing::info;
 
-#[derive(Parser)]
-#[command(name = "polymarket-bot")]
-#[command(about = "Polymarket HFT-lite trading bot - Top performers 2026 style")]
-struct Args {
-    #[arg(short, long, default_value = "paper")]
+#[derive(Serialize)]
+struct HealthResponse {
+    status: String,
     mode: String,
-    
-    #[arg(short, long)]
-    private_key: Option<String>,
+    version: String,
+}
+
+#[derive(Serialize)]
+struct BotStatus {
+    running: bool,
+    mode: String,
+    balance: f64,
+    total_trades: u32,
+    pnl: f64,
+}
+
+async fn health() -> Json<HealthResponse> {
+    let mode = env::var("BOT_MODE").unwrap_or_else(|_| "paper".to_string());
+    Json(HealthResponse {
+        status: "ok".to_string(),
+        mode,
+        version: "1.0.0".to_string(),
+    })
+}
+
+async fn status() -> Json<BotStatus> {
+    let mode = env::var("BOT_MODE").unwrap_or_else(|_| "paper".to_string());
+    Json(BotStatus {
+        running: true,
+        mode,
+        balance: 300.0,
+        total_trades: 0,
+        pnl: 0.0,
+    })
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    // Initialisation logging
+async fn main() {
     tracing_subscriber::fmt::init();
-    
-    // Chargement variables environnement
     dotenv::dotenv().ok();
+
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+
+    info!("🚀 PolyBot API starting on {}", addr);
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any);
+
+    let app = Router::new()
+        .route("/", get(health))
+        .route("/health", get(health))
+        .route("/api/status", get(status))
+        .layer(cors);
+
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    info!("✅ Server running at http://{}", addr);
     
-    let args = Args::parse();
-    
-    info!("🚀 Démarrage Polymarket HFT Bot - Mode {}", args.mode);
-    
-    // Création bot partagé
-    let bot = Arc::new(Mutex::new(PolymarketBot::new(&args.mode, args.private_key).await?));
-    
-    // Lancement UI terminal
-    let mut ui = PolymarketUI::new(bot.clone());
-    
-    if let Err(e) = ui.run().await {
-        error!("❌ Erreur UI: {}", e);
-        return Err(e);
-    }
-    
-    Ok(())
+    axum::serve(listener, app).await.unwrap();
 }
