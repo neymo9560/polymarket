@@ -345,8 +345,8 @@ function App() {
         return
       }
       
-      // LIMITER LE NOMBRE DE POSITIONS SIMULTANÉES (comme les pros)
-      const MAX_OPEN_POSITIONS = 10
+      // PLUS DE POSITIONS SIMULTANÉES (comme les vrais pros)
+      const MAX_OPEN_POSITIONS = 25
       if (currentPositions.length >= MAX_OPEN_POSITIONS) {
         console.log(`⏸️ Max positions atteint (${MAX_OPEN_POSITIONS}), on attend`)
         return
@@ -360,9 +360,9 @@ function App() {
       // MODE LIVE: Passer un vrai ordre sur Polymarket
       const isLive = botState.mode === 'live'
       
-      // Position sizing dynamique
-      const positionPct = opp.positionSize || 0.02
-      const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
+      // Position sizing AGRESSIF comme les pros (5-10% par trade)
+      const positionPct = opp.positionSize || 0.05 // 5% par défaut
+      const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.10) // max 10%
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
       
       // ========================================
@@ -417,9 +417,9 @@ function App() {
         orderStatus: 'PENDING', // PENDING → FILLED quand le marché atteint notre prix
         limitPrice: entryPrice, // Prix auquel on a placé notre ordre
         // Stop loss et take profit basés sur les vrais prix
-        stopLoss: entryPrice * (side === 'YES' ? 0.95 : 1.05),
+        stopLoss: entryPrice * (side === 'YES' ? 0.97 : 1.03), // SL plus serré -3%
         takeProfit: exitAskPrice,
-        maxHoldTime: 180000,
+        maxHoldTime: 60000, // 60 secondes max (comme les pros, pas 3 min)
       }
       
       // EN MODE LIVE: Passer le vrai ordre sur Polymarket
@@ -469,7 +469,7 @@ function App() {
       }
       
       setTrades(prev => [newTrade, ...prev].slice(0, 100))
-    }, 3000) // Trade toutes les 3 secondes
+    }, 1000) // Trade chaque seconde (comme les pros - high frequency)
     
     return () => {
       console.log('⏹️ Bot arrêté')
