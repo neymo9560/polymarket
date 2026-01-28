@@ -136,7 +136,7 @@ export async function fetchMarketDetails(conditionId) {
   }
 }
 
-// Récupérer l'orderbook CLOB pour un token (via proxy si disponible)
+// Récupérer l'orderbook CLOB pour un token (via proxy)
 export async function fetchOrderbook(tokenId) {
   try {
     const response = await fetch(`${API_URL}/api/orderbook?token_id=${tokenId}`)
@@ -146,30 +146,68 @@ export async function fetchOrderbook(tokenId) {
       return { bids: [], asks: [] }
     }
     
-    return await response.json()
+    const data = await response.json()
+    return {
+      bids: data.bids || [],
+      asks: data.asks || [],
+      // Calculer le meilleur bid/ask
+      bestBid: data.bids?.[0]?.price || null,
+      bestAsk: data.asks?.[0]?.price || null,
+      spread: data.asks?.[0]?.price && data.bids?.[0]?.price 
+        ? parseFloat(data.asks[0].price) - parseFloat(data.bids[0].price)
+        : null
+    }
   } catch (error) {
     console.warn('Orderbook non disponible:', error)
     return { bids: [], asks: [] }
   }
 }
 
-// Récupérer les prix mid-market pour plusieurs tokens
-export async function fetchMidpoints(tokenIds) {
+// Récupérer le prix mid-market pour un token
+export async function fetchMidpoint(tokenId) {
   try {
-    const response = await fetch(`${API_URL}/api/midpoints`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token_ids: tokenIds })
-    })
+    const response = await fetch(`${API_URL}/api/midpoint?token_id=${tokenId}`)
     
     if (!response.ok) {
-      console.warn('Midpoints non disponible')
+      console.warn('Midpoint non disponible')
+      return null
+    }
+    
+    const data = await response.json()
+    return data.mid || data.price || null
+  } catch (error) {
+    console.warn('Midpoint non disponible:', error)
+    return null
+  }
+}
+
+// Récupérer le prix d'achat pour un token
+export async function fetchPrice(tokenId) {
+  try {
+    const response = await fetch(`${API_URL}/api/price?token_id=${tokenId}`)
+    
+    if (!response.ok) {
+      return null
+    }
+    
+    const data = await response.json()
+    return data.price || null
+  } catch (error) {
+    return null
+  }
+}
+
+// Récupérer tous les spreads des marchés actifs
+export async function fetchSpreads() {
+  try {
+    const response = await fetch(`${API_URL}/api/spreads`)
+    
+    if (!response.ok) {
       return {}
     }
     
     return await response.json()
   } catch (error) {
-    console.warn('Midpoints non disponible:', error)
     return {}
   }
 }
