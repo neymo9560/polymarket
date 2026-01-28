@@ -115,6 +115,21 @@ function getOrderHeaders() {
 
 // === ROUTES ===
 
+// Proxy pour les marchés Polymarket (évite CORS)
+app.get('/api/markets', async (req, res) => {
+  try {
+    const { closed, limit } = req.query
+    const url = `https://gamma-api.polymarket.com/markets?closed=${closed || 'false'}&limit=${limit || 100}`
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Gamma API error: ${response.status}`)
+    const data = await response.json()
+    res.json(data)
+  } catch (error) {
+    console.log('Erreur proxy markets:', error.message)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', wallet: wallet ? wallet.address : null, hasApiKey: !!apiCredentials })
 })

@@ -1,6 +1,6 @@
-// Polymarket API - Gamma API pour les marchés
+// Polymarket API via Backend Proxy (évite CORS)
 // Stratégies inspirées des TOP TRADERS Polymarket 2024-2026
-const API_URL = 'https://gamma-api.polymarket.com'
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
 // Cache pour historique des prix (pour momentum/mean reversion)
 const priceHistory = new Map()
