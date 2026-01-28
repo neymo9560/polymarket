@@ -46,34 +46,25 @@ async function initWallet() {
     
     console.log('Wallet:', wallet.address)
     
-    // Initialiser le client CLOB avec le SDK officiel
-    clobClient = new ClobClient(CLOB_HOST, CHAIN_ID, wallet)
+    // Initialiser le client CLOB temporaire pour obtenir les credentials
+    let tempClient = new ClobClient(CLOB_HOST, CHAIN_ID, wallet)
     
     // Créer/dériver les credentials API - OBLIGATOIRE pour les ordres
     try {
       console.log('Creation des API credentials...')
-      // Méthode correcte du SDK: createOrDeriveApiKey (pas createOrDeriveApiCreds)
-      const creds = await clobClient.createOrDeriveApiKey()
+      const creds = await tempClient.createOrDeriveApiKey()
       console.log('Credentials recues:', JSON.stringify(creds).substring(0, 100))
       
-      // Le SDK retourne key/secret/passphrase, pas apiKey
-      if (creds && (creds.key || creds.apiKey)) {
-        clobClient.setCreds(creds)
-        console.log('API credentials configurees avec succes:', creds.key || creds.apiKey)
+      if (creds && creds.key) {
+        // Réinitialiser le client avec les credentials
+        clobClient = new ClobClient(CLOB_HOST, CHAIN_ID, wallet, creds)
+        console.log('API credentials configurees avec succes:', creds.key)
       } else {
-        console.log('Credentials invalides, tentative derive...')
-        const derivedCreds = await clobClient.deriveApiKey()
-        if (derivedCreds && (derivedCreds.key || derivedCreds.apiKey)) {
-          clobClient.setCreds(derivedCreds)
-          console.log('API credentials derivees avec succes')
-        } else {
-          console.error('Impossible de creer des credentials API')
-          clobClient = null
-        }
+        console.error('Credentials invalides')
+        clobClient = null
       }
     } catch (err) {
       console.error('Erreur credentials:', err.message)
-      console.error('Stack:', err.stack)
       clobClient = null
     }
     
