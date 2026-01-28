@@ -130,43 +130,67 @@ function App() {
     setOpportunities(allOpportunities.slice(0, 10))
   }, [markets, previousMarkets, botState.activeStrategies])
 
+  // Ref pour éviter les re-renders qui reset l'interval
+  const opportunitiesRef = useRef(opportunities)
+  const balanceRef = useRef(botState.balance)
+  
+  useEffect(() => {
+    opportunitiesRef.current = opportunities
+  }, [opportunities])
+  
+  useEffect(() => {
+    balanceRef.current = botState.balance
+  }, [botState.balance])
+
   // Exécuter les trades PAPER sur les opportunités détectées
   useEffect(() => {
-    if (botState.status !== 'running' || opportunities.length === 0) return
+    if (botState.status !== 'running') return
     if (botState.activeStrategies.length === 0) return
     
+    console.log('🚀 Bot démarré - Trading actif')
+    
     const tradeInterval = setInterval(() => {
+      const currentOpps = opportunitiesRef.current
+      const currentBalance = balanceRef.current
+      
+      if (!currentOpps || currentOpps.length === 0) {
+        console.log('⏳ En attente d\'opportunités...')
+        return
+      }
+      
       // Prendre la meilleure opportunité disponible
-      const opp = opportunities[0]
+      const opp = currentOpps[0]
       if (!opp) return
+      
+      console.log('💰 Trade exécuté:', opp.type, opp.signal)
       
       // Position sizing dynamique (Kelly Criterion style)
       const positionPct = opp.positionSize || 0.02
-      const tradeSize = Math.min(botState.balance * positionPct, botState.balance * 0.05) // Max 5% par trade
-      const entryPrice = opp.action.includes('YES') ? opp.market.yesPrice : opp.market.noPrice
+      const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
+      const entryPrice = opp.action?.includes('YES') ? opp.market.yesPrice : opp.market.noPrice
       
-      // Simuler le résultat du trade (basé sur la confiance + edge réel)
-      const baseWinRate = 0.45 + (opp.confidence * 0.35) // 45-80% selon confiance
-      const edgeBonus = opp.expectedProfit > 5 ? 0.05 : 0 // Bonus si edge > 5%
+      // Simuler le résultat du trade
+      const baseWinRate = 0.45 + ((opp.confidence || 0.5) * 0.35)
+      const edgeBonus = (opp.expectedProfit || 0) > 5 ? 0.05 : 0
       const winProbability = Math.min(baseWinRate + edgeBonus, 0.85)
       const isWin = Math.random() < winProbability
       const profit = isWin 
-        ? tradeSize * (opp.expectedProfit / 100) * (0.7 + Math.random() * 0.6) // 70-130% du profit attendu
-        : -tradeSize * (0.05 + Math.random() * 0.1) // Perte 5-15%
+        ? tradeSize * ((opp.expectedProfit || 2) / 100) * (0.7 + Math.random() * 0.6)
+        : -tradeSize * (0.05 + Math.random() * 0.1)
       
       const newTrade = {
         id: Date.now(),
         timestamp: new Date(),
-        strategy: opp.type.split('_')[0],
-        market: opp.market.symbol || opp.market.slug?.slice(0, 15),
-        question: opp.market.question?.slice(0, 50),
-        side: opp.action.includes('YES') ? 'YES' : 'NO',
-        price: entryPrice.toFixed(3),
+        strategy: opp.type?.split('_')[0] || 'TRADE',
+        market: opp.market?.symbol || opp.market?.slug?.slice(0, 15) || 'Unknown',
+        question: opp.market?.question?.slice(0, 50) || '',
+        side: opp.action?.includes('YES') ? 'YES' : 'NO',
+        price: (entryPrice || 0.5).toFixed(3),
         size: tradeSize.toFixed(2),
         profit: profit,
-        signal: opp.signal,
-        confidence: opp.confidence,
-        isReal: false, // Paper trade
+        signal: opp.signal || '',
+        confidence: opp.confidence || 0.5,
+        isReal: false,
       }
       
       setTrades(prev => [newTrade, ...prev].slice(0, 100))
@@ -178,10 +202,13 @@ function App() {
         todayTrades: prev.todayTrades + 1,
         balance: prev.balance + profit
       }))
-    }, 8000) // Trade toutes les 8 secondes sur les vraies opportunités
+    }, 3000) // Trade toutes les 3 secondes
     
-    return () => clearInterval(tradeInterval)
-  }, [botState.status, opportunities, botState.activeStrategies, botState.balance])
+    return () => {
+      console.log('⏹️ Bot arrêté')
+      clearInterval(tradeInterval)
+    }
+  }, [botState.status, botState.activeStrategies])
 
   const toggleBot = () => {
     setBotState(prev => ({
