@@ -391,6 +391,16 @@ function App() {
         return
       }
       
+      // CALCULER LE CAPITAL DISPONIBLE (balance - positions ouvertes)
+      const capitalInPositions = currentPositions.reduce((sum, p) => sum + (p.size || 0), 0)
+      const availableCapital = currentBalance - capitalInPositions
+      
+      // NE PAS OUVRIR SI PAS ASSEZ DE CAPITAL
+      if (availableCapital <= 0.01) {
+        console.log(`⏸️ Pas de capital disponible (${availableCapital.toFixed(2)}$ libre)`)
+        return
+      }
+      
       // PLUS DE POSITIONS SIMULTANÉES (comme les vrais pros)
       const MAX_OPEN_POSITIONS = 25
       if (currentPositions.length >= MAX_OPEN_POSITIONS) {
@@ -408,18 +418,24 @@ function App() {
         return
       }
       
-      console.log('💰 Trade exécuté:', opp.type, opp.signal)
+      // Position sizing basé sur les SETTINGS de l'utilisateur
+      const savedSettings = JSON.parse(localStorage.getItem('polybot_settings') || '{}')
+      const maxPositionPct = (savedSettings.maxPositionSize || 5) / 100 // Convertir % en décimal
+      const tradeSize = Math.min(availableCapital * maxPositionPct, availableCapital) // Limiter au capital dispo
+      
+      // NE PAS TRADER SI LA TAILLE EST TROP PETITE
+      if (tradeSize < 0.01) {
+        console.log(`⏸️ Taille de trade trop petite (${tradeSize.toFixed(2)}$)`)
+        return
+      }
+      
+      console.log(`💰 Trade exécuté: ${opp.type} | Taille: $${tradeSize.toFixed(2)} | Dispo: $${availableCapital.toFixed(2)}`)
       
       // RÉCUPÉRER LES VRAIS PRIX BID/ASK DE L'ORDERBOOK
       const realPrices = await fetchRealPrices(opp.market)
       
       // MODE LIVE: Passer un vrai ordre sur Polymarket
       const isLive = botState.mode === 'live'
-      
-      // Position sizing basé sur les SETTINGS de l'utilisateur
-      const savedSettings = JSON.parse(localStorage.getItem('polybot_settings') || '{}')
-      const maxPositionPct = (savedSettings.maxPositionSize || 5) / 100 // Convertir % en décimal
-      const tradeSize = currentBalance * maxPositionPct // Utiliser le % configuré par l'utilisateur
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
       
       // ========================================
