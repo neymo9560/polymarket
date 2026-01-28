@@ -52,16 +52,17 @@ async function initWallet() {
     // Créer/dériver les credentials API - OBLIGATOIRE pour les ordres
     try {
       console.log('Creation des API credentials...')
-      const creds = await clobClient.createOrDeriveApiCreds()
+      // Méthode correcte du SDK: createOrDeriveApiKey (pas createOrDeriveApiCreds)
+      const creds = await clobClient.createOrDeriveApiKey()
       console.log('Credentials recues:', JSON.stringify(creds).substring(0, 100))
       
-      if (creds && creds.key) {
+      if (creds && creds.apiKey) {
         clobClient.setCreds(creds)
         console.log('API credentials configurees avec succes')
       } else {
         console.log('Credentials invalides, tentative derive...')
         const derivedCreds = await clobClient.deriveApiKey()
-        if (derivedCreds && derivedCreds.key) {
+        if (derivedCreds && derivedCreds.apiKey) {
           clobClient.setCreds(derivedCreds)
           console.log('API credentials derivees avec succes')
         } else {
