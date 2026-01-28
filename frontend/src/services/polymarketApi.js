@@ -96,8 +96,15 @@ export async function fetchMarkets(limit = 50) {
         volume24h: parseVolume(market.volume24hr) || parseVolume(market.volume),
         liquidity: parseVolume(market.liquidity),
         
-        // Tokens CLOB
-        clobTokenIds: market.clobTokenIds || [],
+        // Tokens CLOB - parser si c'est un string JSON
+        clobTokenIds: (() => {
+          let tokens = market.clobTokenIds
+          if (!tokens) return []
+          if (typeof tokens === 'string') {
+            try { tokens = JSON.parse(tokens) } catch { return [] }
+          }
+          return Array.isArray(tokens) ? tokens : []
+        })(),
         
         // Timestamps
         endDate: market.endDate,
