@@ -3,7 +3,7 @@
 // Envoie des notifications pour les trades gagnants
 // ============================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://neymopoly.up.railway.app'
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
 // Envoyer une alerte Telegram via le backend
 export async function sendTelegramAlert(message) {

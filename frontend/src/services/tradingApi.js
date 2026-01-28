@@ -3,7 +3,7 @@
 // Passe de vrais ordres sur l'orderbook CLOB
 // ============================================================
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://neymopoly.up.railway.app'
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
 // Créer un ordre LIMIT sur Polymarket
 export async function createOrder({
