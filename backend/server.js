@@ -11,8 +11,8 @@ const PORT = process.env.PORT || 3001
 app.use(cors())
 app.use(express.json())
 
-// Config Polygon
-const POLYGON_RPC = 'https://polygon-rpc.com'
+// Config Polygon - utiliser Alchemy ou autre RPC fiable
+const POLYGON_RPC = 'https://polygon-mainnet.g.alchemy.com/v2/demo'
 const POLYMARKET_CLOB_URL = 'https://clob.polymarket.com'
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
 const CTF_EXCHANGE = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045'
@@ -102,10 +102,9 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    const [usdcBalance, maticBalance] = await Promise.all([
-      usdc.balanceOf(wallet.address),
-      provider.getBalance(wallet.address)
-    ])
+    // Appels séparés pour éviter erreur batch
+    const usdcBalance = await usdc.balanceOf(wallet.address)
+    const maticBalance = await provider.getBalance(wallet.address)
     
     res.json({
       address: wallet.address,
@@ -114,6 +113,7 @@ app.get('/api/wallet', async (req, res) => {
       hasGas: parseFloat(ethers.formatEther(maticBalance)) > 0.001
     })
   } catch (error) {
+    console.log('Erreur wallet:', error.message)
     res.status(500).json({ error: error.message })
   }
 })
