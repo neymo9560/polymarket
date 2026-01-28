@@ -713,6 +713,13 @@ function App() {
                 Connexion
               </h3>
               <div className="space-y-2 text-sm">
+                {/* Rôle actuel */}
+                <div className="flex items-center justify-between">
+                  <span className="text-hl-text-muted">Compte</span>
+                  <span className={isAdmin ? 'text-hl-green font-semibold' : 'text-hl-yellow'}>
+                    {isAdmin ? '👑 ADMIN' : '👁️ VIEWER'}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-hl-text-muted">API</span>
                   <span className={wsConnected ? 'text-hl-green' : 'text-hl-red'}>
@@ -736,12 +743,12 @@ function App() {
                 )}
               </div>
               
-              {/* Bouton déconnexion */}
+              {/* Bouton changer de compte */}
               <button
                 onClick={handleLogout}
-                className="w-full mt-4 py-2 text-xs text-hl-text-muted hover:text-hl-red border border-hl-border hover:border-hl-red rounded transition-all"
+                className="w-full mt-4 py-2 text-xs text-white bg-hl-purple/20 hover:bg-hl-purple/40 border border-hl-purple/50 hover:border-hl-purple rounded transition-all"
               >
-                Se déconnecter
+                🔄 Changer de compte
               </button>
             </div>
           </div>
