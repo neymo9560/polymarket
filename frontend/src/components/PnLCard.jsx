@@ -1,17 +1,24 @@
 import { TrendingUp, TrendingDown, Wallet, Target, Zap } from 'lucide-react'
 
-export default function PnLCard({ botState, trades }) {
-  // Calculs P&L
+export default function PnLCard({ botState, trades, openPositions = [] }) {
+  // Calculs P&L RÉALISÉ (trades fermés)
   const closedTrades = trades.filter(t => t.profit !== null)
-  const totalPnL = closedTrades.reduce((sum, t) => sum + (t.profit || 0), 0)
+  const realizedPnL = closedTrades.reduce((sum, t) => sum + (t.profit || 0), 0)
   const winTrades = closedTrades.filter(t => t.profit > 0).length
   const loseTrades = closedTrades.filter(t => t.profit < 0).length
   const winRate = closedTrades.length > 0 ? (winTrades / closedTrades.length * 100) : 0
-  const openTrades = trades.filter(t => t.profit === null).length
+  
+  // Calculs P&L NON RÉALISÉ (positions ouvertes)
+  const unrealizedPnL = openPositions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0)
+  const totalOpenPositions = openPositions.length
+  const totalOpenValue = openPositions.reduce((sum, p) => sum + (p.size || 0), 0)
+  
+  // P&L TOTAL = réalisé + non réalisé
+  const totalPnL = realizedPnL + unrealizedPnL
   
   // ROI
   const roi = botState.startingBalance > 0 
-    ? ((botState.balance - botState.startingBalance) / botState.startingBalance * 100)
+    ? ((botState.balance - botState.startingBalance + unrealizedPnL) / botState.startingBalance * 100)
     : 0
 
   const isProfit = totalPnL >= 0
@@ -77,18 +84,36 @@ export default function PnLCard({ botState, trades }) {
         </div>
       </div>
 
-      {/* Trades ouverts */}
-      {openTrades > 0 && (
-        <div className="mt-4 p-3 rounded-lg bg-hl-yellow/10 border border-hl-yellow/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-hl-yellow" />
-              <span className="text-sm text-hl-yellow">Positions ouvertes</span>
-            </div>
-            <span className="text-lg font-bold text-hl-yellow">{openTrades}</span>
+      {/* POSITIONS OUVERTES + P&L NON RÉALISÉ */}
+      <div className="mt-4 p-3 rounded-lg bg-hl-card-secondary border border-hl-border">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-hl-yellow" />
+            <span className="text-sm text-hl-text-secondary">Positions ouvertes</span>
           </div>
+          <span className="text-lg font-bold text-white">{totalOpenPositions}</span>
         </div>
-      )}
+        
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-hl-text-muted">Valeur totale</span>
+          <span className="text-sm font-mono text-white">${totalOpenValue.toFixed(2)}</span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-hl-text-muted">P&L non réalisé</span>
+          <span className={`text-sm font-bold font-mono ${unrealizedPnL >= 0 ? 'text-hl-green' : 'text-hl-red'}`}>
+            {unrealizedPnL >= 0 ? '+' : ''}{unrealizedPnL.toFixed(2)} $
+          </span>
+        </div>
+      </div>
+      
+      {/* P&L Réalisé */}
+      <div className="mt-2 flex items-center justify-between text-xs">
+        <span className="text-hl-text-muted">P&L réalisé (fermés)</span>
+        <span className={`font-mono ${realizedPnL >= 0 ? 'text-hl-green' : 'text-hl-red'}`}>
+          {realizedPnL >= 0 ? '+' : ''}{realizedPnL.toFixed(2)} $
+        </span>
+      </div>
     </div>
   )
 }

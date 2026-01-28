@@ -463,7 +463,7 @@ function App() {
           {/* Colonne droite - P&L et Paramètres */}
           <div className="lg:col-span-3 space-y-4">
             {/* P&L Card - Le plus important */}
-            <PnLCard botState={botState} trades={trades} />
+            <PnLCard botState={botState} trades={trades} openPositions={openPositions} />
             
             {/* Paramètres */}
             <SettingsPanel 
