@@ -97,15 +97,42 @@ export default function PnLCard({ botState, trades, openPositions = [] }) {
         </div>
       </div>
 
-      {/* POSITIONS OUVERTES + P&L NON RÉALISÉ */}
+      {/* POSITIONS OUVERTES + STATUT ORDRES EN TEMPS RÉEL */}
       <div className="mt-4 p-3 rounded-lg bg-hl-card-secondary border border-hl-border">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-hl-yellow" />
-            <span className="text-sm text-hl-text-secondary">Positions ouvertes</span>
+            <span className="text-sm text-hl-text-secondary">Ordres en cours</span>
           </div>
           <span className="text-lg font-bold text-white">{totalOpenPositions}</span>
         </div>
+        
+        {/* LISTE DES ORDRES EN TEMPS RÉEL */}
+        {openPositions.length > 0 && (
+          <div className="max-h-40 overflow-y-auto space-y-1 mb-2">
+            {openPositions.slice(0, 10).map((pos, i) => (
+              <div key={pos.id || i} className="flex items-center justify-between text-xs bg-hl-bg p-2 rounded">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${
+                    pos.orderStatus === 'FILLED' ? 'bg-hl-green' : 
+                    pos.orderStatus === 'PENDING' ? 'bg-hl-yellow animate-pulse' : 'bg-hl-purple'
+                  }`} />
+                  <span className="text-white truncate max-w-[100px]">{pos.marketSlug || pos.question?.slice(0, 15)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-hl-text-muted">{pos.side}</span>
+                  <span className="text-white font-mono">@{pos.limitPrice?.toFixed(3) || pos.entryPrice?.toFixed(3)}</span>
+                  <span className={`text-xxs px-1 rounded ${
+                    pos.orderStatus === 'FILLED' ? 'bg-hl-green/20 text-hl-green' : 
+                    'bg-hl-yellow/20 text-hl-yellow'
+                  }`}>
+                    {pos.orderStatus === 'FILLED' ? '✓ REMPLI' : '⏳ PENDING'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs text-hl-text-muted">Valeur totale</span>
