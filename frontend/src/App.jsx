@@ -14,28 +14,48 @@ import {
 } from './services/polymarketApi'
 
 function App() {
-  const [botState, setBotState] = useState({
-    mode: 'paper',
-    status: 'stopped',
-    balance: 300.00,
-    startingBalance: 300.00,
-    totalPnl: 0,
-    todayPnl: 0,
-    totalTrades: 0,
-    todayTrades: 0,
-    openPositions: 0,
-    activeStrategies: [],
+  const [botState, setBotState] = useState(() => {
+    const saved = localStorage.getItem('polybot_state')
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      return { ...parsed, status: parsed.status || 'stopped' }
+    }
+    return {
+      mode: 'paper',
+      status: 'stopped',
+      balance: 300.00,
+      startingBalance: 300.00,
+      totalPnl: 0,
+      todayPnl: 0,
+      totalTrades: 0,
+      todayTrades: 0,
+      openPositions: 0,
+      activeStrategies: [],
+    }
   })
 
   const [markets, setMarkets] = useState([])
   const [previousMarkets, setPreviousMarkets] = useState([])
   const [opportunities, setOpportunities] = useState([])
-  const [trades, setTrades] = useState([])
+  const [trades, setTrades] = useState(() => {
+    const saved = localStorage.getItem('polybot_trades')
+    return saved ? JSON.parse(saved) : []
+  })
   const [wsConnected, setWsConnected] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
   
   const intervalRef = useRef(null)
+
+  // Sauvegarder l'état du bot dans localStorage
+  useEffect(() => {
+    localStorage.setItem('polybot_state', JSON.stringify(botState))
+  }, [botState])
+
+  // Sauvegarder les trades dans localStorage
+  useEffect(() => {
+    localStorage.setItem('polybot_trades', JSON.stringify(trades))
+  }, [trades])
 
   // Charger les vrais marchés Polymarket
   const loadMarkets = useCallback(async () => {
