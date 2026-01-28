@@ -88,6 +88,123 @@ async fn proxy_market_details(axum::extract::Path(id): axum::extract::Path<Strin
     }
 }
 
+// ============================================================
+// CLOB API - Orderbook et prix en temps réel
+// ============================================================
+
+#[derive(Deserialize)]
+struct OrderbookQuery {
+    token_id: String,
+}
+
+async fn proxy_orderbook(Query(params): Query<OrderbookQuery>) -> impl IntoResponse {
+    let url = format!(
+        "https://clob.polymarket.com/book?token_id={}",
+        params.token_id
+    );
+    
+    let client = reqwest::Client::new();
+    match client.get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await {
+        Ok(resp) => {
+            match resp.text().await {
+                Ok(body) => (
+                    StatusCode::OK,
+                    [("Content-Type", "application/json")],
+                    body
+                ).into_response(),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read orderbook").into_response(),
+            }
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch orderbook").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct PriceQuery {
+    token_id: String,
+}
+
+async fn proxy_price(Query(params): Query<PriceQuery>) -> impl IntoResponse {
+    let url = format!(
+        "https://clob.polymarket.com/price?token_id={}&side=buy",
+        params.token_id
+    );
+    
+    let client = reqwest::Client::new();
+    match client.get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await {
+        Ok(resp) => {
+            match resp.text().await {
+                Ok(body) => (
+                    StatusCode::OK,
+                    [("Content-Type", "application/json")],
+                    body
+                ).into_response(),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read price").into_response(),
+            }
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch price").into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct MidpointQuery {
+    token_id: String,
+}
+
+async fn proxy_midpoint(Query(params): Query<MidpointQuery>) -> impl IntoResponse {
+    let url = format!(
+        "https://clob.polymarket.com/midpoint?token_id={}",
+        params.token_id
+    );
+    
+    let client = reqwest::Client::new();
+    match client.get(&url)
+        .header("Accept", "application/json")
+        .send()
+        .await {
+        Ok(resp) => {
+            match resp.text().await {
+                Ok(body) => (
+                    StatusCode::OK,
+                    [("Content-Type", "application/json")],
+                    body
+                ).into_response(),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read midpoint").into_response(),
+            }
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch midpoint").into_response(),
+    }
+}
+
+// Récupérer les spreads pour tous les marchés actifs
+async fn proxy_spreads() -> impl IntoResponse {
+    let url = "https://clob.polymarket.com/spreads";
+    
+    let client = reqwest::Client::new();
+    match client.get(url)
+        .header("Accept", "application/json")
+        .send()
+        .await {
+        Ok(resp) => {
+            match resp.text().await {
+                Ok(body) => (
+                    StatusCode::OK,
+                    [("Content-Type", "application/json")],
+                    body
+                ).into_response(),
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read spreads").into_response(),
+            }
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch spreads").into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -109,6 +226,11 @@ async fn main() {
         .route("/api/status", get(status))
         .route("/api/markets", get(proxy_markets))
         .route("/api/markets/{id}", get(proxy_market_details))
+        // CLOB API endpoints
+        .route("/api/orderbook", get(proxy_orderbook))
+        .route("/api/price", get(proxy_price))
+        .route("/api/midpoint", get(proxy_midpoint))
+        .route("/api/spreads", get(proxy_spreads))
         .layer(cors);
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
