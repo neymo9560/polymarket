@@ -1,12 +1,11 @@
-// Polymarket Gamma API - Real Data Connection
-const GAMMA_API = 'https://gamma-api.polymarket.com'
-const CLOB_API = 'https://clob.polymarket.com'
+// Polymarket API via Backend Proxy (CORS bypass)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
-// Récupérer les marchés actifs depuis Polymarket
+// Récupérer les marchés actifs depuis Polymarket via proxy
 export async function fetchMarkets(limit = 50) {
   try {
     const response = await fetch(
-      `${GAMMA_API}/markets?closed=false&limit=${limit}&order=volume24hr&ascending=false`
+      `${API_URL}/api/markets?closed=false&limit=${limit}`
     )
     
     if (!response.ok) {
@@ -55,7 +54,7 @@ export async function fetchMarkets(limit = 50) {
 // Récupérer un marché spécifique avec son orderbook
 export async function fetchMarketDetails(conditionId) {
   try {
-    const response = await fetch(`${GAMMA_API}/markets/${conditionId}`)
+    const response = await fetch(`${API_URL}/api/markets/${conditionId}`)
     
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`)
@@ -68,39 +67,41 @@ export async function fetchMarketDetails(conditionId) {
   }
 }
 
-// Récupérer l'orderbook CLOB pour un token
+// Récupérer l'orderbook CLOB pour un token (via proxy si disponible)
 export async function fetchOrderbook(tokenId) {
   try {
-    const response = await fetch(`${CLOB_API}/book?token_id=${tokenId}`)
+    const response = await fetch(`${API_URL}/api/orderbook?token_id=${tokenId}`)
     
     if (!response.ok) {
-      throw new Error(`CLOB API Error: ${response.status}`)
+      console.warn('Orderbook non disponible')
+      return { bids: [], asks: [] }
     }
     
     return await response.json()
   } catch (error) {
-    console.error('Erreur fetch orderbook:', error)
-    throw error
+    console.warn('Orderbook non disponible:', error)
+    return { bids: [], asks: [] }
   }
 }
 
 // Récupérer les prix mid-market pour plusieurs tokens
 export async function fetchMidpoints(tokenIds) {
   try {
-    const response = await fetch(`${CLOB_API}/midpoints`, {
+    const response = await fetch(`${API_URL}/api/midpoints`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token_ids: tokenIds })
     })
     
     if (!response.ok) {
-      throw new Error(`CLOB API Error: ${response.status}`)
+      console.warn('Midpoints non disponible')
+      return {}
     }
     
     return await response.json()
   } catch (error) {
-    console.error('Erreur fetch midpoints:', error)
-    throw error
+    console.warn('Midpoints non disponible:', error)
+    return {}
   }
 }
 
