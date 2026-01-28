@@ -62,9 +62,9 @@ export default function TradesHistory({ trades }) {
                     ${trade.size}
                   </td>
                   <td className={`py-2 text-right font-mono font-medium ${
-                    trade.profit >= 0 ? 'text-hl-green' : 'text-hl-red'
+                    trade.profit === null ? 'text-hl-yellow' : trade.profit >= 0 ? 'text-hl-green' : 'text-hl-red'
                   }`}>
-                    {trade.profit >= 0 ? '+' : ''}{trade.profit.toFixed(3)}
+                    {trade.profit === null ? 'OPEN' : `${trade.profit >= 0 ? '+' : ''}${trade.profit.toFixed(3)}`}
                   </td>
                 </tr>
               ))

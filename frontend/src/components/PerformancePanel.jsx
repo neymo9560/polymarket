@@ -1,12 +1,15 @@
 import { TrendingUp, TrendingDown, Activity, DollarSign } from 'lucide-react'
 
 export default function PerformancePanel({ botState, trades }) {
-  const winTrades = trades.filter(t => t.profit >= 0).length
-  const loseTrades = trades.filter(t => t.profit < 0).length
-  const winRate = trades.length > 0 ? ((winTrades / trades.length) * 100).toFixed(1) : 0
+  // Filtrer les trades fermés (avec profit non-null)
+  const closedTrades = trades.filter(t => t.profit !== null)
+  const winTrades = closedTrades.filter(t => t.profit >= 0).length
+  const loseTrades = closedTrades.filter(t => t.profit < 0).length
+  const openTrades = trades.filter(t => t.profit === null).length
+  const winRate = closedTrades.length > 0 ? ((winTrades / closedTrades.length) * 100).toFixed(1) : 0
   
-  const totalProfit = trades.reduce((sum, t) => sum + (t.profit >= 0 ? t.profit : 0), 0)
-  const totalLoss = trades.reduce((sum, t) => sum + (t.profit < 0 ? Math.abs(t.profit) : 0), 0)
+  const totalProfit = closedTrades.reduce((sum, t) => sum + (t.profit >= 0 ? t.profit : 0), 0)
+  const totalLoss = closedTrades.reduce((sum, t) => sum + (t.profit < 0 ? Math.abs(t.profit) : 0), 0)
   const profitFactor = totalLoss > 0 ? (totalProfit / totalLoss).toFixed(2) : '∞'
 
   const formatCurrency = (value) => {
