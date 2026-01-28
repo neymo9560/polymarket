@@ -334,11 +334,12 @@ function App() {
         openedAt: new Date(),
         strategy: opp.type,
         signal: opp.signal,
-        // SCALPING STYLE: petits gains, stop loss serré
-        stopLoss: entryPrice * (side === 'YES' ? 0.99 : 1.01), // -1% stop loss serré
-        takeProfit: entryPrice * (side === 'YES' ? 1.02 : 0.98), // +2% take profit rapide
-        // Timeout: fermer après 30 secondes si pas de mouvement
-        maxHoldTime: 30000,
+        // STRATÉGIE ADAPTÉE AU SPREAD RÉEL
+        // Le spread Polymarket est ~1%, donc on doit attendre un mouvement > 2% pour être rentable
+        stopLoss: entryPrice * (side === 'YES' ? 0.97 : 1.03), // -3% stop loss (laisser respirer)
+        takeProfit: entryPrice * (side === 'YES' ? 1.03 : 0.97), // +3% take profit (couvre le spread)
+        // Timeout: attendre 2 minutes pour laisser le temps au prix de bouger
+        maxHoldTime: 120000,
       }
       
       // Ajouter aux positions ouvertes
