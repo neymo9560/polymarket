@@ -228,7 +228,7 @@ function App() {
   // Charger les vrais marchés Polymarket
   const loadMarkets = useCallback(async () => {
     try {
-      const realMarkets = await fetchMarkets(30)
+      const realMarkets = await fetchMarkets(100) // 100 marchés comme les pros
       
       // Sauvegarder les anciens prix pour détecter les changements
       setPreviousMarkets(markets)
