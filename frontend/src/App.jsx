@@ -416,9 +416,10 @@ function App() {
       // MODE LIVE: Passer un vrai ordre sur Polymarket
       const isLive = botState.mode === 'live'
       
-      // Position sizing AGRESSIF comme les pros (5-10% par trade)
-      const positionPct = opp.positionSize || 0.05 // 5% par défaut
-      const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.10) // max 10%
+      // Position sizing basé sur les SETTINGS de l'utilisateur
+      const savedSettings = JSON.parse(localStorage.getItem('polybot_settings') || '{}')
+      const maxPositionPct = (savedSettings.maxPositionSize || 5) / 100 // Convertir % en décimal
+      const tradeSize = currentBalance * maxPositionPct // Utiliser le % configuré par l'utilisateur
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
       
       // ========================================
