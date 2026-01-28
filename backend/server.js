@@ -3,7 +3,7 @@
  */
 const express = require('express')
 const cors = require('cors')
-const { ethers } = require('ethers')
+const ethers = require('ethers')
 const { ClobClient } = require('@polymarket/clob-client')
 
 const app = express()
@@ -40,7 +40,7 @@ async function initWallet() {
       return false
     }
     
-    provider = new ethers.JsonRpcProvider(POLYGON_RPC)
+    provider = new ethers.providers.JsonRpcProvider(POLYGON_RPC)
     wallet = new ethers.Wallet(privateKey, provider)
     usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, wallet)
     
@@ -100,9 +100,9 @@ app.get('/api/wallet', async (req, res) => {
     
     res.json({
       address: wallet.address,
-      usdcBalance: parseFloat(ethers.formatUnits(usdcBalance, 6)),
-      maticBalance: parseFloat(ethers.formatEther(maticBalance)),
-      hasGas: parseFloat(ethers.formatEther(maticBalance)) > 0.001
+      usdcBalance: parseFloat(ethers.utils.formatUnits(usdcBalance, 6)),
+      maticBalance: parseFloat(ethers.utils.formatEther(maticBalance)),
+      hasGas: parseFloat(ethers.utils.formatEther(maticBalance)) > 0.001
     })
   } catch (error) {
     console.log('Erreur wallet:', error.message)
@@ -192,7 +192,7 @@ app.post('/api/approve-usdc', async (req, res) => {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     const currentAllowance = await usdc.allowance(wallet.address, CTF_EXCHANGE)
     if (currentAllowance > 0) return res.json({ success: true, message: 'USDC deja approuve' })
-    const tx = await usdc.approve(CTF_EXCHANGE, ethers.MaxUint256)
+    const tx = await usdc.approve(CTF_EXCHANGE, ethers.constants.MaxUint256)
     await tx.wait()
     res.json({ success: true, txHash: tx.hash })
   } catch (error) {
