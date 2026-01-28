@@ -86,7 +86,7 @@ function App() {
       const currentPrice = pos.side === 'YES' ? currentMarket.yesPrice : currentMarket.noPrice
       const pnl = (currentPrice - pos.entryPrice) * pos.size
       
-      // Vérifier Stop Loss ou Take Profit
+      // Vérifier Stop Loss, Take Profit, ou Timeout
       const hitStopLoss = pos.side === 'YES' 
         ? currentPrice <= pos.stopLoss 
         : currentPrice >= pos.stopLoss
@@ -94,14 +94,25 @@ function App() {
         ? currentPrice >= pos.takeProfit
         : currentPrice <= pos.takeProfit
       
-      if (hitStopLoss || hitTakeProfit) {
-        // Fermer la position
+      // Timeout: fermer après maxHoldTime avec le P&L actuel
+      const holdTime = Date.now() - new Date(pos.openedAt).getTime()
+      const hitTimeout = holdTime > (pos.maxHoldTime || 30000)
+      
+      // Micro-gain: fermer si gain > 0.5% (scalping agressif)
+      const microGain = pnl > pos.size * 0.005
+      
+      if (hitStopLoss || hitTakeProfit || hitTimeout || microGain) {
+        let closeReason = 'TIMEOUT'
+        if (hitTakeProfit) closeReason = 'TAKE_PROFIT'
+        else if (hitStopLoss) closeReason = 'STOP_LOSS'
+        else if (microGain) closeReason = 'MICRO_GAIN'
+        
         positionsToClose.push({
           ...pos,
           currentPrice,
           realizedPnl: pnl,
           closedAt: new Date(),
-          closeReason: hitTakeProfit ? 'TAKE_PROFIT' : 'STOP_LOSS'
+          closeReason
         })
       } else {
         updatedPositions.push({ ...pos, currentPrice, unrealizedPnl: pnl })
@@ -265,8 +276,10 @@ function App() {
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
       const entryPrice = side === 'YES' ? opp.market.yesPrice : opp.market.noPrice
       
-      // SIMULATION RÉALISTE: On ouvre une position au prix actuel
-      // Le profit sera calculé quand on la fermera (basé sur le VRAI mouvement de prix)
+      // STRATÉGIE SCALPING DES BOTS 6 CHIFFRES:
+      // - Petits gains fréquents (1-3%)
+      // - Stop loss serré (-1%)
+      // - Volume élevé de trades
       const newPosition = {
         id: Date.now(),
         marketId: opp.market.id,
@@ -280,9 +293,11 @@ function App() {
         openedAt: new Date(),
         strategy: opp.type,
         signal: opp.signal,
-        // Stop loss et take profit réalistes
-        stopLoss: entryPrice * (side === 'YES' ? 0.90 : 1.10), // -10%
-        takeProfit: entryPrice * (side === 'YES' ? 1.15 : 0.85), // +15%
+        // SCALPING STYLE: petits gains, stop loss serré
+        stopLoss: entryPrice * (side === 'YES' ? 0.99 : 1.01), // -1% stop loss serré
+        takeProfit: entryPrice * (side === 'YES' ? 1.02 : 0.98), // +2% take profit rapide
+        // Timeout: fermer après 30 secondes si pas de mouvement
+        maxHoldTime: 30000,
       }
       
       // Ajouter aux positions ouvertes
