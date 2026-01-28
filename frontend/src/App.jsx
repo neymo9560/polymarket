@@ -301,6 +301,7 @@ function App() {
   // Ref pour éviter les re-renders qui reset l'interval
   const opportunitiesRef = useRef(opportunities)
   const balanceRef = useRef(botState.balance)
+  const openPositionsRef = useRef(openPositions)
   
   useEffect(() => {
     opportunitiesRef.current = opportunities
@@ -309,6 +310,10 @@ function App() {
   useEffect(() => {
     balanceRef.current = botState.balance
   }, [botState.balance])
+  
+  useEffect(() => {
+    openPositionsRef.current = openPositions
+  }, [openPositions])
 
   // Exécuter les trades PAPER sur les opportunités détectées
   useEffect(() => {
@@ -330,8 +335,11 @@ function App() {
       const opp = currentOpps[0]
       if (!opp) return
       
+      // UTILISER LE REF POUR AVOIR LES POSITIONS À JOUR
+      const currentPositions = openPositionsRef.current
+      
       // ÉVITER LES DOUBLONS: ne pas ouvrir si on a déjà une position sur ce marché
-      const existingPosition = openPositions.find(p => p.marketId === opp.market.id)
+      const existingPosition = currentPositions.find(p => p.marketId === opp.market.id)
       if (existingPosition) {
         console.log('⏭️ Position déjà ouverte sur ce marché, on passe')
         return
@@ -339,7 +347,7 @@ function App() {
       
       // LIMITER LE NOMBRE DE POSITIONS SIMULTANÉES (comme les pros)
       const MAX_OPEN_POSITIONS = 10
-      if (openPositions.length >= MAX_OPEN_POSITIONS) {
+      if (currentPositions.length >= MAX_OPEN_POSITIONS) {
         console.log(`⏸️ Max positions atteint (${MAX_OPEN_POSITIONS}), on attend`)
         return
       }
