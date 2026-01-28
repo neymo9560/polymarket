@@ -210,7 +210,8 @@ function calculateVolatility(history) {
   return Math.sqrt(variance)
 }
 
-// STRATÉGIE A: ARBITRAGE + SPREAD TRADING (comme Theo, Fredi, etc.)
+// STRATÉGIE A: ARBITRAGE + FAVORITE COMPOUNDER (comme Theo, Fredi, Gabagool)
+// Source: https://www.datawallet.com/crypto/top-polymarket-trading-strategies
 export function detectArbitrageOpportunities(markets) {
   const opportunities = []
   
@@ -218,50 +219,65 @@ export function detectArbitrageOpportunities(markets) {
     const { yesPrice, noPrice, spread, volume24h, liquidity } = market
     const sum = yesPrice + noPrice
     
-    // 1. Arbitrage classique: YES + NO < 100%
+    // 1. Binary Complement Arbitrage: YES + NO < 100%
     if (sum < 0.995 && sum > 0.8) {
       const profit = (1 - sum) * 100
-      const kelly = kellyFraction(0.95, profit, 5)
       opportunities.push({
-        type: 'ARB_UNDER',
+        type: 'ARB_BINARY',
         market,
-        signal: `🎯 Arb: YES+NO=${(sum*100).toFixed(1)}% | Profit ${profit.toFixed(1)}%`,
+        signal: `🎯 Arb: YES+NO=${(sum*100).toFixed(1)}% | +${profit.toFixed(1)}%`,
         expectedProfit: profit,
         action: 'BUY_BOTH',
-        confidence: Math.min(profit / 5, 0.95),
-        positionSize: kelly,
+        confidence: 0.95, // Arbitrage = quasi certain
+        positionSize: 0.05, // Plus gros car sûr
       })
     }
     
-    // 2. Spread trading: Spread > 1% avec bon volume
-    if (spread > 0.01 && volume24h > 5000) {
+    // 2. FAVORITE COMPOUNDER - LA VRAIE STRATÉGIE DES MILLIONNAIRES
+    // Acheter NO quand YES < 5% (quasi certain de gagner)
+    // Rendement faible mais TRÈS safe = compound over time
+    if (yesPrice <= 0.05 && yesPrice > 0.001 && volume24h > 10000) {
+      const yield_pct = (1 - noPrice) / noPrice * 100 // Rendement si NO gagne
       opportunities.push({
-        type: 'SPREAD_TRADE',
+        type: 'FAVORITE_NO',
         market,
-        signal: `📊 Spread ${(spread*100).toFixed(1)}% | Vol $${(volume24h/1000).toFixed(0)}k`,
-        expectedProfit: spread * 50,
+        signal: `� Safe NO: YES=${(yesPrice*100).toFixed(1)}% | Yield +${yield_pct.toFixed(1)}%`,
+        expectedProfit: yield_pct,
+        action: 'BUY_NO',
+        confidence: 0.92, // 92%+ de chance de gagner
+        positionSize: 0.08, // Position plus grosse car safe
+      })
+    }
+    
+    // Acheter YES quand NO < 5%
+    if (noPrice <= 0.05 && noPrice > 0.001 && volume24h > 10000) {
+      const yield_pct = (1 - yesPrice) / yesPrice * 100
+      opportunities.push({
+        type: 'FAVORITE_YES',
+        market,
+        signal: `💰 Safe YES: NO=${(noPrice*100).toFixed(1)}% | Yield +${yield_pct.toFixed(1)}%`,
+        expectedProfit: yield_pct,
+        action: 'BUY_YES',
+        confidence: 0.92,
+        positionSize: 0.08,
+      })
+    }
+    
+    // 3. Spread capture sur marchés liquides
+    if (spread > 0.005 && volume24h > 50000 && liquidity > 10000) {
+      opportunities.push({
+        type: 'SPREAD_CAPTURE',
+        market,
+        signal: `� Spread ${(spread*100).toFixed(2)}% | Liq $${(liquidity/1000).toFixed(0)}k`,
+        expectedProfit: spread * 100,
         action: yesPrice < 0.5 ? 'BUY_YES' : 'BUY_NO',
-        confidence: Math.min(spread * 20, 0.8),
-        positionSize: 0.02,
-      })
-    }
-    
-    // 3. Liquidity arbitrage: Prix éloigné de 50% avec forte liquidité
-    if (liquidity > 50000 && (yesPrice < 0.2 || yesPrice > 0.8)) {
-      const edge = yesPrice < 0.2 ? (0.2 - yesPrice) : (yesPrice - 0.8)
-      opportunities.push({
-        type: 'LIQ_ARB',
-        market,
-        signal: `💧 Liq $${(liquidity/1000).toFixed(0)}k | Edge ${(edge*100).toFixed(1)}%`,
-        expectedProfit: edge * 30,
-        action: yesPrice < 0.2 ? 'BUY_YES' : 'BUY_NO',
-        confidence: Math.min(edge * 5, 0.7),
+        confidence: 0.75,
         positionSize: 0.03,
       })
     }
   }
   
-  return opportunities.sort((a, b) => b.expectedProfit - a.expectedProfit)
+  return opportunities.sort((a, b) => b.confidence - a.confidence) // Priorité aux trades safe
 }
 
 // STRATÉGIE B: CONTRARIAN + VALUE BETTING (comme les whales Polymarket)
