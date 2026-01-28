@@ -165,15 +165,17 @@ function App() {
       const hitTimeout = holdTime > (pos.maxHoldTime || 10000)
       
       // P&L RÉEL basé sur les vrais prix du marché
-      // FRAIS POLYMARKET SIMULÉS (comme en live):
-      // - 2% sur les gains uniquement (pas sur les pertes)
-      // - Frais de trading ~0.5% par transaction
-      const POLYMARKET_FEE = 0.02 // 2% sur les gains
-      const TRADING_FEE = 0.005 // 0.5% par trade (entrée + sortie = 1%)
+      // FRAIS POLYMARKET OFFICIELS (100% réaliste):
+      // - Maker orders (limite): 0% frais
+      // - Taker orders (market): ~1% frais
+      // - Profit fee: 2% sur les gains uniquement
+      // Notre bot fait du market making = ordres limite = MAKER
+      const MAKER_FEE = 0.00 // 0% pour ordres limite (market making)
+      const PROFIT_FEE = 0.02 // 2% sur les gains uniquement
       
       const grossPnl = pnl
-      const tradingFees = pos.size * TRADING_FEE * 2 // Entrée + sortie
-      const profitFee = grossPnl > 0 ? grossPnl * POLYMARKET_FEE : 0
+      const tradingFees = pos.size * MAKER_FEE * 2 // Maker = 0%
+      const profitFee = grossPnl > 0 ? grossPnl * PROFIT_FEE : 0
       const realPnl = grossPnl - tradingFees - profitFee
       
       // Fermer si SL/TP atteint ou timeout
