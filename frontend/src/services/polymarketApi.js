@@ -352,8 +352,9 @@ export function detectArbitrageOpportunities(markets) {
     
     // 4. MARKET MAKING SIMPLE - S'APPLIQUE À TOUS LES MARCHÉS
     // Capturer le spread sur n'importe quel marché actif
-    if (volume24h > 1000) { // Critère minimal: juste du volume
-      const effectiveSpread = spread || 0.01 // Spread par défaut 1%
+    // Pas de critère de volume - on veut du MM sur tous les marchés
+    const effectiveSpread = spread || 0.01 // Spread par défaut 1%
+    if (yesPrice > 0.01 && yesPrice < 0.99) { // Juste vérifier que le marché est actif
       opportunities.push({
         type: 'MARKET_MAKING',
         market,
