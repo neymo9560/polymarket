@@ -35,7 +35,7 @@ const strategies = [
   },
 ]
 
-export default function StrategiesPanel({ botState, toggleStrategy }) {
+export default function StrategiesPanel({ botState, toggleStrategy, isAdmin = true }) {
   return (
     <div className="hl-card p-4">
       <h3 className="text-sm font-semibold text-hl-text-secondary mb-4 uppercase tracking-wider">
@@ -50,8 +50,10 @@ export default function StrategiesPanel({ botState, toggleStrategy }) {
           return (
             <button
               key={strategy.code}
-              onClick={() => toggleStrategy(strategy.code)}
+              onClick={isAdmin ? () => toggleStrategy(strategy.code) : undefined}
+              disabled={!isAdmin}
               className={`p-4 rounded-lg border transition-all text-left ${
+                !isAdmin ? 'cursor-default' :
                 isActive
                   ? `border-${strategy.color} bg-${strategy.color} bg-opacity-10`
                   : 'border-hl-border hover:bg-hl-hover'

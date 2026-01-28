@@ -1,19 +1,28 @@
-import { Play, Square, ToggleLeft, ToggleRight, AlertTriangle } from 'lucide-react'
+import { Play, Square, ToggleLeft, ToggleRight, AlertTriangle, Eye } from 'lucide-react'
 
-export default function ControlPanel({ botState, toggleBot, toggleMode }) {
+export default function ControlPanel({ botState, toggleBot, toggleMode, isAdmin = true }) {
   const isRunning = botState.status === 'running'
 
   return (
     <div className="hl-card p-4">
-      <h3 className="text-sm font-semibold text-hl-text-secondary mb-4 uppercase tracking-wider">
-        Contrôles
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-hl-text-secondary uppercase tracking-wider">
+          Contrôles
+        </h3>
+        {!isAdmin && (
+          <span className="flex items-center gap-1 text-xs text-hl-yellow">
+            <Eye className="w-3 h-3" /> Mode Viewer
+          </span>
+        )}
+      </div>
 
       <div className="space-y-3">
         {/* Bouton principal Start/Stop */}
         <button
-          onClick={toggleBot}
+          onClick={isAdmin ? toggleBot : undefined}
+          disabled={!isAdmin}
           className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded font-semibold text-sm transition-all ${
+            !isAdmin ? 'opacity-50 cursor-not-allowed bg-hl-border text-hl-text-muted' :
             isRunning
               ? 'bg-hl-red text-white hover:bg-opacity-80'
               : 'bg-hl-green text-black hover:bg-opacity-80'
@@ -34,10 +43,10 @@ export default function ControlPanel({ botState, toggleBot, toggleMode }) {
 
         {/* Mode Toggle Paper/Live */}
         <button
-          onClick={toggleMode}
-          disabled={isRunning}
+          onClick={isAdmin ? toggleMode : undefined}
+          disabled={isRunning || !isAdmin}
           className={`w-full flex items-center justify-between px-4 py-2.5 rounded border border-hl-border hover:bg-hl-hover transition-all ${
-            isRunning ? 'opacity-50 cursor-not-allowed' : ''
+            (isRunning || !isAdmin) ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >
           <span className="text-sm">Mode Trading</span>

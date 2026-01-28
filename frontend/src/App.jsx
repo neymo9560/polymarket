@@ -25,6 +25,12 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     return localStorage.getItem('polybot_auth') === 'true'
   })
+  
+  // Rôle: 'admin' = contrôle total, 'viewer' = lecture seule
+  const [userRole, setUserRole] = useState(() => {
+    return localStorage.getItem('polybot_role') || 'viewer'
+  })
+  const isAdmin = userRole === 'admin'
 
   const [botState, setBotState] = useState(() => {
     const saved = localStorage.getItem('polybot_state')
@@ -628,12 +634,17 @@ function App() {
   // Déconnexion
   const handleLogout = () => {
     localStorage.removeItem('polybot_auth')
+    localStorage.removeItem('polybot_role')
     setIsAuthenticated(false)
+    setUserRole('viewer')
   }
 
   // Écran de login si non authentifié
   if (!isAuthenticated) {
-    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />
+    return <LoginScreen onLogin={(role) => {
+      setIsAuthenticated(true)
+      setUserRole(role || 'viewer')
+    }} />
   }
 
   return (
@@ -648,6 +659,7 @@ function App() {
               botState={botState} 
               toggleBot={toggleBot} 
               toggleMode={toggleMode}
+              isAdmin={isAdmin}
             />
             <MarketsPanel markets={markets} />
           </div>
@@ -657,6 +669,7 @@ function App() {
             <StrategiesPanel 
               botState={botState} 
               toggleStrategy={toggleStrategy}
+              isAdmin={isAdmin}
             />
             <OpportunitiesPanel opportunities={opportunities} />
             <StrategyAnalytics trades={trades} openPositions={openPositions} />
@@ -668,12 +681,14 @@ function App() {
             {/* P&L Card - Le plus important */}
             <PnLCard botState={botState} trades={trades} openPositions={openPositions} />
             
-            {/* Paramètres */}
-            <SettingsPanel 
-              botState={botState} 
-              setBotState={setBotState}
-              onReset={resetStats}
-            />
+            {/* Paramètres - Admin seulement */}
+            {isAdmin && (
+              <SettingsPanel 
+                botState={botState} 
+                setBotState={setBotState}
+                onReset={resetStats}
+              />
+            )}
             
             {/* Status connexion */}
             <div className="hl-card p-4">

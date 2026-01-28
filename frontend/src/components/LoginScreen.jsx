@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Lock, Eye, EyeOff } from 'lucide-react'
 
-const CORRECT_PASSWORD = 'Binabine25!'
+// Mots de passe
+const ADMIN_PASSWORD = 'Binabine25!'
+const VIEWER_PASSWORD = 'Bina'
 
 export default function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState('')
@@ -15,9 +17,14 @@ export default function LoginScreen({ onLogin }) {
     setError('')
 
     setTimeout(() => {
-      if (password === CORRECT_PASSWORD) {
+      if (password === ADMIN_PASSWORD) {
         localStorage.setItem('polybot_auth', 'true')
-        onLogin()
+        localStorage.setItem('polybot_role', 'admin')
+        onLogin('admin')
+      } else if (password === VIEWER_PASSWORD) {
+        localStorage.setItem('polybot_auth', 'true')
+        localStorage.setItem('polybot_role', 'viewer')
+        onLogin('viewer')
       } else {
         setError('Mot de passe incorrect')
         setIsLoading(false)
