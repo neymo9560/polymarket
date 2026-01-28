@@ -13,7 +13,7 @@ app.use(cors())
 app.use(express.json())
 
 // Config
-const POLYGON_RPC = 'https://rpc.ankr.com/polygon'
+const POLYGON_RPC = 'https://polygon.llamarpc.com'
 const CLOB_HOST = 'https://clob.polymarket.com'
 const CHAIN_ID = 137
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
