@@ -329,7 +329,15 @@ function App() {
     // Stratégie C: Scalping + Volume
     if (botState.activeStrategies.includes('C')) {
       const scalpOpps = detectScalpingOpportunities(markets, previousMarkets)
-      allOpportunities.push(...scalpOpps)
+      // Filtrer pour ne garder que le scalping (pas MM)
+      allOpportunities.push(...scalpOpps.filter(o => o.type !== 'MARKET_MAKING'))
+    }
+    
+    // Stratégie D: Market Making
+    if (botState.activeStrategies.includes('D')) {
+      const mmOpps = detectScalpingOpportunities(markets, previousMarkets)
+      // Filtrer pour ne garder que le Market Making
+      allOpportunities.push(...mmOpps.filter(o => o.type === 'MARKET_MAKING'))
     }
     
     setOpportunities(allOpportunities.slice(0, 50)) // 50 opportunités pour trader sur plus de marchés
