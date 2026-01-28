@@ -41,6 +41,13 @@ function App() {
     const saved = localStorage.getItem('polybot_trades')
     return saved ? JSON.parse(saved) : []
   })
+  
+  // Positions ouvertes pour simulation réaliste
+  const [openPositions, setOpenPositions] = useState(() => {
+    const saved = localStorage.getItem('polybot_positions')
+    return saved ? JSON.parse(saved) : []
+  })
+  
   const [wsConnected, setWsConnected] = useState(false)
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
@@ -56,6 +63,94 @@ function App() {
   useEffect(() => {
     localStorage.setItem('polybot_trades', JSON.stringify(trades))
   }, [trades])
+  
+  // Sauvegarder les positions ouvertes
+  useEffect(() => {
+    localStorage.setItem('polybot_positions', JSON.stringify(openPositions))
+  }, [openPositions])
+  
+  // Mettre à jour le P&L des positions ouvertes et fermer si SL/TP atteint
+  useEffect(() => {
+    if (openPositions.length === 0 || markets.length === 0) return
+    
+    const positionsToClose = []
+    const updatedPositions = []
+    
+    openPositions.forEach(pos => {
+      const currentMarket = markets.find(m => m.id === pos.marketId)
+      if (!currentMarket) {
+        updatedPositions.push(pos)
+        return
+      }
+      
+      const currentPrice = pos.side === 'YES' ? currentMarket.yesPrice : currentMarket.noPrice
+      const pnl = (currentPrice - pos.entryPrice) * pos.size
+      
+      // Vérifier Stop Loss ou Take Profit
+      const hitStopLoss = pos.side === 'YES' 
+        ? currentPrice <= pos.stopLoss 
+        : currentPrice >= pos.stopLoss
+      const hitTakeProfit = pos.side === 'YES'
+        ? currentPrice >= pos.takeProfit
+        : currentPrice <= pos.takeProfit
+      
+      if (hitStopLoss || hitTakeProfit) {
+        // Fermer la position
+        positionsToClose.push({
+          ...pos,
+          currentPrice,
+          realizedPnl: pnl,
+          closedAt: new Date(),
+          closeReason: hitTakeProfit ? 'TAKE_PROFIT' : 'STOP_LOSS'
+        })
+      } else {
+        updatedPositions.push({ ...pos, currentPrice, unrealizedPnl: pnl })
+      }
+    })
+    
+    // Mettre à jour les positions
+    if (positionsToClose.length > 0) {
+      setOpenPositions(updatedPositions)
+      
+      // Ajouter les trades fermés et mettre à jour la balance
+      positionsToClose.forEach(closedPos => {
+        const profit = closedPos.realizedPnl
+        const returnedValue = closedPos.size * closedPos.currentPrice
+        
+        // Ajouter le trade fermé
+        setTrades(prev => [{
+          id: Date.now() + Math.random(),
+          timestamp: new Date(),
+          strategy: closedPos.strategy?.split('_')[0] || 'TRADE',
+          market: closedPos.marketSlug?.slice(0, 15) || 'Unknown',
+          question: closedPos.question || '',
+          side: closedPos.side,
+          price: closedPos.currentPrice.toFixed(3),
+          entryPrice: closedPos.entryPrice.toFixed(3),
+          size: closedPos.size.toFixed(2),
+          profit: profit,
+          signal: closedPos.closeReason,
+          status: 'CLOSED',
+          isReal: false,
+        }, ...prev].slice(0, 100))
+        
+        // Mettre à jour la balance et les stats
+        setBotState(prev => ({
+          ...prev,
+          balance: prev.balance + returnedValue,
+          totalPnl: prev.totalPnl + profit,
+          todayPnl: prev.todayPnl + profit,
+          totalTrades: prev.totalTrades + 1,
+          todayTrades: prev.todayTrades + 1,
+          openPositions: updatedPositions.length,
+        }))
+        
+        console.log(`📊 Position fermée: ${closedPos.closeReason} | P&L: $${profit.toFixed(2)}`)
+      })
+    } else {
+      setOpenPositions(updatedPositions)
+    }
+  }, [markets])
 
   // Charger les vrais marchés Polymarket
   const loadMarkets = useCallback(async () => {
@@ -164,47 +259,61 @@ function App() {
       
       console.log('💰 Trade exécuté:', opp.type, opp.signal)
       
-      // Position sizing dynamique (Kelly Criterion style)
+      // Position sizing dynamique
       const positionPct = opp.positionSize || 0.02
       const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
-      const entryPrice = opp.action?.includes('YES') ? opp.market.yesPrice : opp.market.noPrice
+      const side = opp.action?.includes('YES') ? 'YES' : 'NO'
+      const entryPrice = side === 'YES' ? opp.market.yesPrice : opp.market.noPrice
       
-      // Simuler le résultat du trade - STYLE PRO TRADER
-      // Les pros ont: 60-75% winrate, gains 2-3x plus gros que pertes, stop loss serré
-      const baseWinRate = 0.60 + ((opp.confidence || 0.5) * 0.20) // 60-80% winrate
-      const edgeBonus = (opp.expectedProfit || 0) > 3 ? 0.05 : 0
-      const winProbability = Math.min(baseWinRate + edgeBonus, 0.82)
-      const isWin = Math.random() < winProbability
+      // SIMULATION RÉALISTE: On ouvre une position au prix actuel
+      // Le profit sera calculé quand on la fermera (basé sur le VRAI mouvement de prix)
+      const newPosition = {
+        id: Date.now(),
+        marketId: opp.market.id,
+        marketSlug: opp.market.slug,
+        question: opp.market.question?.slice(0, 50),
+        side,
+        entryPrice,
+        currentPrice: entryPrice,
+        size: tradeSize,
+        unrealizedPnl: 0,
+        openedAt: new Date(),
+        strategy: opp.type,
+        signal: opp.signal,
+        // Stop loss et take profit réalistes
+        stopLoss: entryPrice * (side === 'YES' ? 0.90 : 1.10), // -10%
+        takeProfit: entryPrice * (side === 'YES' ? 1.15 : 0.85), // +15%
+      }
       
-      // Ratio Risk/Reward pro: gains 2-4x plus gros que pertes
-      const avgGain = tradeSize * ((opp.expectedProfit || 3) / 100) * (1.5 + Math.random() * 1.5) // 150-300% du profit attendu
-      const avgLoss = tradeSize * (0.02 + Math.random() * 0.03) // Pertes limitées à 2-5% (stop loss serré)
-      const profit = isWin ? avgGain : -avgLoss
+      // Ajouter aux positions ouvertes
+      setOpenPositions(prev => [...prev, newPosition])
       
+      // Déduire le coût de la balance
+      const cost = tradeSize * entryPrice
+      setBotState(prev => ({
+        ...prev,
+        balance: prev.balance - cost,
+        openPositions: prev.openPositions + 1,
+      }))
+      
+      // Logger le trade ouvert
       const newTrade = {
         id: Date.now(),
         timestamp: new Date(),
         strategy: opp.type?.split('_')[0] || 'TRADE',
-        market: opp.market?.symbol || opp.market?.slug?.slice(0, 15) || 'Unknown',
+        market: opp.market?.slug?.slice(0, 15) || 'Unknown',
         question: opp.market?.question?.slice(0, 50) || '',
-        side: opp.action?.includes('YES') ? 'YES' : 'NO',
-        price: (entryPrice || 0.5).toFixed(3),
+        side,
+        price: entryPrice.toFixed(3),
         size: tradeSize.toFixed(2),
-        profit: profit,
+        profit: null, // Pas encore réalisé
         signal: opp.signal || '',
         confidence: opp.confidence || 0.5,
+        status: 'OPEN',
         isReal: false,
       }
       
       setTrades(prev => [newTrade, ...prev].slice(0, 100))
-      setBotState(prev => ({
-        ...prev,
-        totalPnl: prev.totalPnl + profit,
-        todayPnl: prev.todayPnl + profit,
-        totalTrades: prev.totalTrades + 1,
-        todayTrades: prev.todayTrades + 1,
-        balance: prev.balance + profit
-      }))
     }, 3000) // Trade toutes les 3 secondes
     
     return () => {
