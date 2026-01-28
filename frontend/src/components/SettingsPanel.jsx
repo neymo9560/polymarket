@@ -1,14 +1,55 @@
 import { useState } from 'react'
-import { Settings, DollarSign, Percent, Clock, RotateCcw, Shield } from 'lucide-react'
+import { Settings, DollarSign, Percent, Clock, RotateCcw, Shield, Zap } from 'lucide-react'
+
+// PARAMÈTRES RECOMMANDÉS BASÉS SUR LES TOP TRADERS POLYMARKET
+// (Theo4, Fredi9999, Gabagool, Swisstony)
+const RECOMMENDED_SETTINGS = {
+  conservative: {
+    name: '🛡️ Conservateur',
+    desc: 'Faible risque, gains stables',
+    maxPositionSize: 2,
+    stopLossPercent: 0.5,
+    takeProfitPercent: 1,
+    tradeInterval: 5,
+  },
+  balanced: {
+    name: '⚖️ Équilibré',
+    desc: 'Bon ratio risque/rendement',
+    maxPositionSize: 5,
+    stopLossPercent: 1,
+    takeProfitPercent: 2,
+    tradeInterval: 3,
+  },
+  aggressive: {
+    name: '🔥 Agressif (Gabagool)',
+    desc: 'Style des top traders',
+    maxPositionSize: 8,
+    stopLossPercent: 1.5,
+    takeProfitPercent: 3,
+    tradeInterval: 2,
+  },
+  whale: {
+    name: '🐋 Whale (Theo/Fredi)',
+    desc: 'Gros capital, high volume',
+    maxPositionSize: 10,
+    stopLossPercent: 2,
+    takeProfitPercent: 5,
+    tradeInterval: 1,
+  },
+}
 
 export default function SettingsPanel({ botState, setBotState, onReset }) {
-  const [settings, setSettings] = useState({
-    startingBalance: botState.startingBalance || 300,
-    maxPositionSize: 5, // % du capital par trade
-    stopLossPercent: 1, // % de perte max
-    takeProfitPercent: 2, // % de gain pour fermer
-    maxOpenPositions: 10,
-    tradeInterval: 3, // secondes entre trades
+  const [settings, setSettings] = useState(() => {
+    const saved = localStorage.getItem('polybot_settings')
+    if (saved) return JSON.parse(saved)
+    return {
+      startingBalance: botState.startingBalance || 300,
+      maxPositionSize: 5,
+      stopLossPercent: 1,
+      takeProfitPercent: 2,
+      maxOpenPositions: 10,
+      tradeInterval: 3,
+    }
   })
 
   const handleChange = (key, value) => {
@@ -30,6 +71,17 @@ export default function SettingsPanel({ botState, setBotState, onReset }) {
     }
   }
 
+  const applyPreset = (presetKey) => {
+    const preset = RECOMMENDED_SETTINGS[presetKey]
+    setSettings(prev => ({
+      ...prev,
+      maxPositionSize: preset.maxPositionSize,
+      stopLossPercent: preset.stopLossPercent,
+      takeProfitPercent: preset.takeProfitPercent,
+      tradeInterval: preset.tradeInterval,
+    }))
+  }
+
   return (
     <div className="hl-card p-4">
       <div className="flex items-center justify-between mb-4">
@@ -37,6 +89,26 @@ export default function SettingsPanel({ botState, setBotState, onReset }) {
           <Settings className="w-4 h-4" />
           Paramètres
         </h3>
+      </div>
+
+      {/* PRÉSETS RECOMMANDÉS */}
+      <div className="mb-4">
+        <label className="flex items-center gap-2 text-xs text-hl-text-muted mb-2">
+          <Zap className="w-3 h-3 text-hl-yellow" />
+          Présets recommandés
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {Object.entries(RECOMMENDED_SETTINGS).map(([key, preset]) => (
+            <button
+              key={key}
+              onClick={() => applyPreset(key)}
+              className="p-2 text-left bg-hl-bg border border-hl-border rounded hover:border-hl-green transition-all"
+            >
+              <div className="text-xs font-medium text-white">{preset.name}</div>
+              <div className="text-xxs text-hl-text-muted">{preset.desc}</div>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-4">
