@@ -155,21 +155,28 @@ app.post('/api/order', async (req, res) => {
       return res.status(400).json({ error: 'tokenId invalide' })
     }
     
-    console.log('Ordre MARKET via SDK:', side, size, 'tokens, token:', tokenId.substring(0, 20))
+    console.log('Ordre LIMIT via SDK:', side, size, 'tokens @', price, 'token:', tokenId.substring(0, 20))
     
-    // Utiliser le SDK officiel pour créer un ordre MARKET (exécution immédiate)
-    const order = await clobClient.createMarketOrder({
+    // Utiliser le SDK officiel pour créer un ordre LIMIT
+    const order = await clobClient.createOrder({
       tokenID: tokenId,
       side: side.toUpperCase(),
-      amount: parseFloat(size) // Quantité en tokens
+      price: parseFloat(price),
+      size: parseFloat(size)
     })
     
-    console.log('Ordre MARKET cree:', order)
+    console.log('Ordre LIMIT cree:', order)
     
     // Poster l'ordre
     const result = await clobClient.postOrder(order)
-    console.log('Ordre MARKET execute:', result)
-    res.json(result)
+    console.log('Ordre LIMIT poste:', result)
+    
+    // Retourner l'ID pour suivi
+    res.json({ 
+      ...result, 
+      orderId: result.orderID || result.id,
+      status: 'PENDING'
+    })
   } catch (error) {
     console.error('Erreur ordre complete:', error)
     res.status(500).json({ error: error.message || 'Erreur inconnue' })

@@ -157,9 +157,42 @@ function App() {
           console.log(`✅ Ordre REMPLI: ${pos.marketSlug} @ ${pos.limitPrice}`)
         }
         
-        // TIMEOUT: Annuler l'ordre après 2 minutes si pas rempli (comme en live)
+        // AJUSTEMENT DYNAMIQUE: Si pas rempli après 5s, annuler et replacer au nouveau prix
+        const ADJUST_INTERVAL = 5000 // 5 secondes
+        const timeSincePlaced = pos.liveOrderPlacedAt ? Date.now() - pos.liveOrderPlacedAt : holdTime
+        
+        if (timeSincePlaced > ADJUST_INTERVAL && !orderFilled && pos.liveOrderId && botState.mode === 'live') {
+          // Annuler l'ancien ordre et replacer au nouveau meilleur prix
+          const newBidPrice = currentBidPrice
+          if (Math.abs(newBidPrice - pos.liveOrderPrice) > 0.001) {
+            console.log(`🔄 Ajustement ordre: ${pos.marketSlug} | Ancien: ${pos.liveOrderPrice?.toFixed(3)} → Nouveau: ${newBidPrice.toFixed(3)}`)
+            // Annuler via backend puis replacer
+            cancelOrder(pos.liveOrderId)
+              .then(() => {
+                const tokenId = pos.side === 'YES' ? pos.clobTokenIds?.[0] : pos.clobTokenIds?.[1]
+                if (tokenId) {
+                  return placeLimitOrder(tokenId, 'BUY', newBidPrice, pos.size / newBidPrice)
+                }
+              })
+              .then(result => {
+                if (result) {
+                  pos.liveOrderId = result.orderID || result.orderId
+                  pos.liveOrderPrice = newBidPrice
+                  pos.liveOrderPlacedAt = Date.now()
+                  pos.limitPrice = newBidPrice
+                  console.log(`✅ Ordre replacé: ${pos.liveOrderId} @ ${newBidPrice.toFixed(3)}`)
+                }
+              })
+              .catch(err => console.log('Erreur ajustement:', err.message))
+          }
+        }
+        
+        // TIMEOUT: Annuler l'ordre après 2 minutes si pas rempli
         if (holdTime > 120000 && !orderFilled) {
           console.log(`❌ Ordre ANNULÉ (timeout): ${pos.marketSlug}`)
+          if (pos.liveOrderId && botState.mode === 'live') {
+            cancelOrder(pos.liveOrderId).catch(() => {})
+          }
           // Ne pas ajouter à updatedPositions = position supprimée
           return
         }
@@ -386,7 +419,11 @@ function App() {
       allOpportunities.push(...mmOpps.filter(o => o.type === 'MARKET_MAKING'))
     }
     
-    setOpportunities(allOpportunities.slice(0, 50)) // 50 opportunités pour trader sur plus de marchés
+    // FILTRE LIQUIDITÉ: ne garder que les marchés avec volume > $50k pour avoir des contreparties
+    const MIN_VOLUME = 50000
+    const liquidOpps = allOpportunities.filter(o => (o.market?.volume || 0) >= MIN_VOLUME)
+    
+    setOpportunities(liquidOpps.slice(0, 50)) // 50 opportunités sur marchés liquides
   }, [markets, previousMarkets, botState.activeStrategies])
 
   // Ref pour éviter les re-renders qui reset l'interval
@@ -554,8 +591,10 @@ function App() {
             tradeSize / entryPrice // Convertir $ en quantité de tokens
           )
           
-          newPosition.liveOrderId = orderResult.orderID
-          console.log('🔴 LIVE: Ordre réel envoyé via backend sécurisé:', orderResult.orderID)
+          newPosition.liveOrderId = orderResult.orderID || orderResult.orderId
+          newPosition.liveOrderPrice = entryPrice
+          newPosition.liveOrderPlacedAt = Date.now()
+          console.log('🔴 LIVE: Ordre LIMIT placé:', newPosition.liveOrderId, '@ $' + entryPrice.toFixed(3))
         } catch (error) {
           console.error('❌ Erreur ordre LIVE:', error)
           return // Ne pas continuer si l'ordre échoue
