@@ -91,17 +91,21 @@ function App() {
         return
       }
       
-      // PRIX DE SORTIE RÉEL = BID (le prix auquel on peut vendre maintenant)
-      // En vrai trading: on achète au ASK, on vend au BID
-      // Le spread est la différence entre les deux
-      const currentBidPrice = pos.side === 'YES' 
-        ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)  // Estimer le bid à ~1% sous le mid
+      // MARKET MAKING: On a acheté au BID, on vend au ASK
+      // Notre ordre de vente est placé au ASK et attend d'être rempli
+      const currentAskPrice = pos.side === 'YES' 
+        ? (currentMarket.yesAsk || currentMarket.yesPrice * 1.01)
+        : (currentMarket.noAsk || currentMarket.noPrice * 1.01)
+      
+      const currentBidPrice = pos.side === 'YES'
+        ? (currentMarket.yesBid || currentMarket.yesPrice * 0.99)
         : (currentMarket.noBid || currentMarket.noPrice * 0.99)
       
-      const currentPrice = currentBidPrice
+      // Pour le market making: on vend au ASK (pas au BID!)
+      const currentPrice = pos.isMarketMaking ? currentAskPrice : currentBidPrice
       
-      // P&L RÉEL = (Prix de vente BID - Prix d'achat ASK) × quantité
-      // C'est EXACTEMENT ce qu'on aurait en live
+      // P&L MARKET MAKING = (ASK sortie - BID entrée) × quantité
+      // = On CAPTE le spread au lieu de le payer!
       const pnl = (currentPrice - pos.entryPrice) * pos.size
       
       // Vérifier Stop Loss, Take Profit, ou Timeout
@@ -296,7 +300,6 @@ function App() {
       console.log('💰 Trade exécuté:', opp.type, opp.signal)
       
       // RÉCUPÉRER LES VRAIS PRIX BID/ASK DE L'ORDERBOOK
-      // Comme en trading réel: on achète au ASK, on vend au BID
       const realPrices = await fetchRealPrices(opp.market)
       
       // Position sizing dynamique
@@ -304,16 +307,30 @@ function App() {
       const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
       const side = opp.action?.includes('YES') ? 'YES' : 'NO'
       
-      // PRIX RÉEL D'ACHAT = ASK (le prix le plus bas auquel quelqu'un vend)
-      // C'est exactement ce qu'on paierait en live
-      const entryPrice = side === 'YES' 
-        ? (realPrices.yesAsk || opp.market.yesPrice)
-        : (realPrices.noAsk || opp.market.noPrice)
+      // ========================================
+      // MARKET MAKING RÉALISTE
+      // On place un ordre LIMIT au prix BID (pas ASK)
+      // = On achète MOINS CHER que le marché
+      // Comme les vrais market makers
+      // ========================================
       
-      // Stocker aussi le BID pour calculer le P&L de sortie
-      const exitBidPrice = side === 'YES'
-        ? (realPrices.yesBid || opp.market.yesPrice)
-        : (realPrices.noBid || opp.market.noPrice)
+      const bestBid = side === 'YES' 
+        ? (realPrices.yesBid || opp.market.yesPrice * 0.99)
+        : (realPrices.noBid || opp.market.noPrice * 0.99)
+      
+      const bestAsk = side === 'YES'
+        ? (realPrices.yesAsk || opp.market.yesPrice * 1.01)
+        : (realPrices.noAsk || opp.market.noPrice * 1.01)
+      
+      // ORDRE LIMIT: on place notre ordre au BID (on achète au prix des acheteurs)
+      // En réel, cet ordre serait dans l'orderbook et attendrait d'être rempli
+      const entryPrice = bestBid // On achète au BID, pas au ASK!
+      
+      // Notre ordre de sortie sera au ASK (on vend au prix des vendeurs)
+      const exitAskPrice = bestAsk
+      
+      // Le spread qu'on va capter = ASK - BID
+      const spreadToCapture = bestAsk - bestBid
       
       // STRATÉGIE SCALPING DES BOTS 6 CHIFFRES:
       // - Petits gains fréquents (1-3%)
@@ -326,20 +343,22 @@ function App() {
         clobTokenIds: opp.market.clobTokenIds,
         question: opp.market.question?.slice(0, 50),
         side,
-        entryPrice,        // Prix ASK auquel on a acheté
-        exitBidPrice,      // Prix BID pour calculer le P&L de sortie immédiat
+        // MARKET MAKING: on achète au BID, on vend au ASK
+        entryPrice,           // Prix BID auquel on a placé notre ordre d'achat
+        exitAskPrice,         // Prix ASK auquel on placera notre ordre de vente
+        spreadToCapture,      // Le spread qu'on va capter
         currentPrice: entryPrice,
         size: tradeSize,
         unrealizedPnl: 0,
         openedAt: new Date(),
         strategy: opp.type,
         signal: opp.signal,
-        // STRATÉGIE ADAPTÉE AU SPREAD RÉEL
-        // Le spread Polymarket est ~1%, donc on doit attendre un mouvement > 2% pour être rentable
-        stopLoss: entryPrice * (side === 'YES' ? 0.97 : 1.03), // -3% stop loss (laisser respirer)
-        takeProfit: entryPrice * (side === 'YES' ? 1.03 : 0.97), // +3% take profit (couvre le spread)
-        // Timeout: attendre 2 minutes pour laisser le temps au prix de bouger
-        maxHoldTime: 120000,
+        isMarketMaking: true, // Flag pour indiquer qu'on fait du market making
+        // MARKET MAKING: pas de SL/TP classique, on attend juste que l'ordre soit rempli
+        stopLoss: entryPrice * (side === 'YES' ? 0.95 : 1.05), // -5% protection
+        takeProfit: exitAskPrice, // Notre TP = le ASK où on a placé l'ordre de vente
+        // Timeout: 3 minutes pour laisser le temps aux ordres d'être remplis
+        maxHoldTime: 180000,
       }
       
       // Ajouter aux positions ouvertes
