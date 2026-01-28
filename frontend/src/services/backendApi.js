@@ -3,11 +3,8 @@
  * La clé privée est sur le serveur, pas ici!
  */
 
-// En mode LOCAL: utiliser localhost, sinon Render
-const isLocalMode = window.location.hostname === 'localhost' || import.meta.env.VITE_LOCAL_BACKEND === 'true'
-const BACKEND_URL = isLocalMode 
-  ? 'http://localhost:3001' 
-  : (import.meta.env.VITE_BACKEND_URL || 'https://polybot-backend.onrender.com')
+// Backend Fly.io (Frankfurt, Allemagne)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'https://polybot-backend-live.fly.dev'
 
 // Health check
 export async function checkBackendHealth() {
