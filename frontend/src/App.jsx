@@ -19,6 +19,7 @@ import {
 import { executeLiveTrade } from './services/tradingApi'
 import { sendTelegramAlert, formatWinAlert, formatStatusAlert } from './services/telegramApi'
 import { saveBotState, loadBotState } from './services/supabaseClient'
+import { initLiveTrading, getLiveInstance } from './services/polymarketLive'
 
 function App() {
   // Authentification
@@ -70,7 +71,30 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
   
+  // Trading LIVE
+  const [liveWallet, setLiveWallet] = useState(null)
+  const [liveBalance, setLiveBalance] = useState({ usdc: 0, matic: 0 })
+  
   const intervalRef = useRef(null)
+  
+  // Initialiser le trading LIVE si clé privée disponible
+  useEffect(() => {
+    const privateKey = import.meta.env.VITE_PRIVATE_KEY
+    if (privateKey && !liveWallet) {
+      try {
+        const live = initLiveTrading(privateKey)
+        setLiveWallet(live)
+        
+        // Récupérer les balances
+        live.getAccountSummary().then(summary => {
+          setLiveBalance({ usdc: summary.usdcBalance, matic: summary.maticBalance })
+          console.log('💰 Wallet LIVE connecté:', summary)
+        })
+      } catch (err) {
+        console.error('Erreur init wallet LIVE:', err)
+      }
+    }
+  }, [])
 
   // Sauvegarder l'état du bot dans localStorage
   useEffect(() => {
@@ -495,22 +519,36 @@ function App() {
         maxHoldTime: 60000, // 60 secondes max (comme les pros, pas 3 min)
       }
       
-      // EN MODE LIVE: Passer le vrai ordre sur Polymarket
-      if (isLive) {
+      // EN MODE LIVE: Passer le vrai ordre sur Polymarket via API CLOB
+      if (isLive && liveWallet) {
         try {
-          await executeLiveTrade({
-            market: opp.market,
-            side,
-            action: 'BUY',
-            price: entryPrice,
-            size: tradeSize,
-            isLive: true
-          })
-          console.log('🔴 LIVE: Ordre réel envoyé à Polymarket')
+          // Récupérer le token ID pour le marché
+          const tokenId = side === 'YES' 
+            ? opp.market.clobTokenIds?.[0] 
+            : opp.market.clobTokenIds?.[1]
+          
+          if (!tokenId) {
+            console.error('❌ Token ID non trouvé pour ce marché')
+            return
+          }
+          
+          // Passer l'ordre LIMIT réel
+          const orderResult = await liveWallet.placeLimitOrder(
+            tokenId,
+            'BUY',
+            entryPrice,
+            tradeSize / entryPrice // Convertir $ en quantité de tokens
+          )
+          
+          newPosition.liveOrderId = orderResult.orderID
+          console.log('🔴 LIVE: Ordre réel envoyé à Polymarket:', orderResult.orderID)
         } catch (error) {
           console.error('❌ Erreur ordre LIVE:', error)
           return // Ne pas continuer si l'ordre échoue
         }
+      } else if (isLive && !liveWallet) {
+        console.error('❌ Mode LIVE activé mais wallet non connecté. Ajouter VITE_PRIVATE_KEY dans .env.local')
+        return
       }
       
       // Ajouter aux positions ouvertes
