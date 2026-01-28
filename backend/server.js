@@ -104,15 +104,28 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    // Appels séparés pour éviter erreur batch
-    const usdcBalance = await usdc.balanceOf(wallet.address)
-    const maticBalance = await provider.getBalance(wallet.address)
+    // Utiliser Polygonscan API pour les soldes (plus fiable)
+    const address = wallet.address
+    
+    // MATIC balance via Polygonscan
+    const maticUrl = `https://api.polygonscan.com/api?module=account&action=balance&address=${address}&tag=latest`
+    const maticRes = await fetch(maticUrl)
+    const maticData = await maticRes.json()
+    const maticBalance = maticData.result ? parseFloat(ethers.utils.formatEther(maticData.result)) : 0
+    
+    // USDC balance via Polygonscan
+    const usdcUrl = `https://api.polygonscan.com/api?module=account&action=tokenbalance&contractaddress=${USDC_ADDRESS}&address=${address}&tag=latest`
+    const usdcRes = await fetch(usdcUrl)
+    const usdcData = await usdcRes.json()
+    const usdcBalance = usdcData.result ? parseFloat(ethers.utils.formatUnits(usdcData.result, 6)) : 0
+    
+    console.log('Wallet balances:', { address, usdcBalance, maticBalance })
     
     res.json({
       address: wallet.address,
-      usdcBalance: parseFloat(ethers.utils.formatUnits(usdcBalance, 6)),
-      maticBalance: parseFloat(ethers.utils.formatEther(maticBalance)),
-      hasGas: parseFloat(ethers.utils.formatEther(maticBalance)) > 0.001
+      usdcBalance,
+      maticBalance,
+      hasGas: maticBalance > 0.001
     })
   } catch (error) {
     console.log('Erreur wallet:', error.message)
