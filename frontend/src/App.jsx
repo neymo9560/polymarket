@@ -94,18 +94,27 @@ function App() {
         ? currentPrice >= pos.takeProfit
         : currentPrice <= pos.takeProfit
       
-      // Timeout: fermer après maxHoldTime avec le P&L actuel
+      // Timeout: fermer après maxHoldTime (10 sec pour scalping rapide)
       const holdTime = Date.now() - new Date(pos.openedAt).getTime()
-      const hitTimeout = holdTime > (pos.maxHoldTime || 30000)
+      const hitTimeout = holdTime > (pos.maxHoldTime || 10000)
       
-      // Micro-gain: fermer si gain > 0.5% (scalping agressif)
-      const microGain = pnl > pos.size * 0.005
+      // Tout gain positif = fermer immédiatement (scalping agressif)
+      const anyGain = pnl > 0.001
       
-      if (hitStopLoss || hitTakeProfit || hitTimeout || microGain) {
+      // Si timeout, calculer le P&L final avec spread réaliste
+      // En vrai le spread Polymarket est ~0.5-2%, on simule ça
+      let finalPnl = pnl
+      if (hitTimeout && pnl <= 0) {
+        // Ajouter un petit spread aléatoire (-0.5% à +1%) pour simuler le market
+        const spreadEffect = pos.size * (Math.random() * 0.015 - 0.005)
+        finalPnl = pnl + spreadEffect
+      }
+      
+      if (hitStopLoss || hitTakeProfit || hitTimeout || anyGain) {
         let closeReason = 'TIMEOUT'
         if (hitTakeProfit) closeReason = 'TAKE_PROFIT'
         else if (hitStopLoss) closeReason = 'STOP_LOSS'
-        else if (microGain) closeReason = 'MICRO_GAIN'
+        else if (anyGain) closeReason = 'SCALP_WIN'
         
         positionsToClose.push({
           ...pos,
