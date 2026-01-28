@@ -208,8 +208,14 @@ function App() {
       positionsToClose.forEach(closedPos => {
         // CALCUL CORRECT: tokens = size$ / entryPrice
         const tokens = closedPos.size / closedPos.entryPrice
-        const profit = (closedPos.currentPrice - closedPos.entryPrice) * tokens
-        const returnedValue = closedPos.size + profit // Capital initial + profit
+        const grossProfit = (closedPos.currentPrice - closedPos.entryPrice) * tokens
+        
+        // APPLIQUER LES FRAIS POLYMARKET (2% sur gains)
+        const PROFIT_FEE = 0.02
+        const profitFee = grossProfit > 0 ? grossProfit * PROFIT_FEE : 0
+        const profit = grossProfit - profitFee
+        
+        const returnedValue = closedPos.size + profit // Capital initial + profit net
         
         // Ajouter le trade fermé
         setTrades(prev => [{
