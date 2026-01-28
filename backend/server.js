@@ -3,10 +3,10 @@
  * La clé privée reste ICI (côté serveur), jamais exposée au frontend
  */
 
-require('dotenv').config()
-const express = require('express')
-const cors = require('cors')
-const { ethers } = require('ethers')
+import 'dotenv/config'
+import express from 'express'
+import cors from 'cors'
+import { ethers } from 'ethers'
 
 const app = express()
 const PORT = process.env.PORT || 3001
