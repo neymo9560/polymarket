@@ -1,9 +1,10 @@
 /**
- * BACKEND SÉCURISÉ - Trading Polymarket
+ * BACKEND SÉCURISÉ - Trading Polymarket avec SDK officiel
  */
 const express = require('express')
 const cors = require('cors')
 const { ethers } = require('ethers')
+const { ClobClient } = require('@polymarket/clob-client')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -11,9 +12,10 @@ const PORT = process.env.PORT || 3001
 app.use(cors())
 app.use(express.json())
 
-// Config Polygon - RPC officiel Polygon
+// Config
 const POLYGON_RPC = 'https://polygon-bor-rpc.publicnode.com'
-const POLYMARKET_CLOB_URL = 'https://clob.polymarket.com'
+const CLOB_HOST = 'https://clob.polymarket.com'
+const CHAIN_ID = 137
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
 const CTF_EXCHANGE = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045'
 
@@ -26,9 +28,9 @@ const USDC_ABI = [
 let wallet = null
 let provider = null
 let usdc = null
-let apiCredentials = null
+let clobClient = null
 
-function initWallet() {
+async function initWallet() {
   try {
     const privateKey = process.env.PRIVATE_KEY
     console.log('PRIVATE_KEY presente:', !!privateKey)
@@ -43,83 +45,23 @@ function initWallet() {
     usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, wallet)
     
     console.log('Wallet:', wallet.address)
+    
+    // Initialiser le client CLOB avec le SDK officiel
+    clobClient = new ClobClient(CLOB_HOST, CHAIN_ID, wallet)
+    
+    // Créer/dériver les credentials API
+    try {
+      const creds = await clobClient.createOrDeriveApiCreds()
+      clobClient.setCreds(creds)
+      console.log('API credentials créées via SDK')
+    } catch (err) {
+      console.log('Erreur credentials:', err.message)
+    }
+    
     return true
   } catch (error) {
     console.log('Erreur wallet:', error.message)
     return false
-  }
-}
-
-// Auth headers pour Polymarket (EIP-712)
-async function getAuthHeaders() {
-  const timestamp = Math.floor(Date.now() / 1000).toString()
-  const nonce = 0
-  
-  // EIP-712 Domain
-  const domain = {
-    name: 'ClobAuthDomain',
-    version: '1',
-    chainId: 137 // Polygon
-  }
-  
-  const types = {
-    ClobAuth: [
-      { name: 'address', type: 'address' },
-      { name: 'timestamp', type: 'string' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'message', type: 'string' }
-    ]
-  }
-  
-  const value = {
-    address: wallet.address,
-    timestamp: timestamp,
-    nonce: nonce,
-    message: 'This message attests that I control the given wallet'
-  }
-  
-  const signature = await wallet.signTypedData(domain, types, value)
-  
-  return {
-    'POLY_ADDRESS': wallet.address,
-    'POLY_SIGNATURE': signature,
-    'POLY_TIMESTAMP': timestamp,
-    'POLY_NONCE': nonce.toString()
-  }
-}
-
-// Headers pour éviter blocage Cloudflare
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Origin': 'https://polymarket.com',
-  'Referer': 'https://polymarket.com/'
-}
-
-// Creer API key
-async function createApiKey() {
-  if (apiCredentials) return apiCredentials
-  const headers = await getAuthHeaders()
-  const response = await fetch(`${POLYMARKET_CLOB_URL}/auth/api-key`, {
-    method: 'POST',
-    headers: { ...BROWSER_HEADERS, 'Content-Type': 'application/json', ...headers }
-  })
-  if (!response.ok) throw new Error(`Erreur API key: ${response.status}`)
-  apiCredentials = await response.json()
-  console.log('API Key creee')
-  return apiCredentials
-}
-
-function getOrderHeaders() {
-  if (!apiCredentials) throw new Error('API Key requise')
-  return {
-    ...BROWSER_HEADERS,
-    'Content-Type': 'application/json',
-    'POLY_ADDRESS': wallet.address,
-    'POLY_API_KEY': apiCredentials.apiKey,
-    'POLY_PASSPHRASE': apiCredentials.passphrase,
-    'POLY_TIMESTAMP': Date.now().toString(),
   }
 }
 
@@ -141,7 +83,7 @@ app.get('/api/markets', async (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', wallet: wallet ? wallet.address : null, hasApiKey: !!apiCredentials })
+  res.json({ status: 'ok', wallet: wallet ? wallet.address : null, hasClobClient: !!clobClient })
 })
 
 app.get('/', (req, res) => {
@@ -170,24 +112,25 @@ app.get('/api/wallet', async (req, res) => {
 
 app.post('/api/order', async (req, res) => {
   try {
-    if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
+    if (!clobClient) return res.status(500).json({ error: 'CLOB client non initialise' })
     const { tokenId, side, price, size } = req.body
     if (!tokenId || !side || !price || !size) {
       return res.status(400).json({ error: 'Parametres manquants' })
     }
-    await createApiKey()
-    const headers = getOrderHeaders()
-    const order = { tokenID: tokenId, side: side.toUpperCase(), price: price.toString(), size: size.toString(), type: 'GTC' }
-    console.log('Ordre:', side, size, '@', price)
-    const response = await fetch(`${POLYMARKET_CLOB_URL}/order`, {
-      method: 'POST', headers, body: JSON.stringify(order)
+    
+    console.log('Ordre via SDK:', side, size, '@', price)
+    
+    // Utiliser le SDK officiel pour créer l'ordre
+    const order = await clobClient.createOrder({
+      tokenID: tokenId,
+      side: side.toUpperCase(),
+      price: parseFloat(price),
+      size: parseFloat(size)
     })
-    if (!response.ok) {
-      const error = await response.text()
-      throw new Error(`Erreur ordre: ${error}`)
-    }
-    const result = await response.json()
-    console.log('Ordre place:', result.orderID)
+    
+    // Poster l'ordre
+    const result = await clobClient.postOrder(order)
+    console.log('Ordre place via SDK:', result)
     res.json(result)
   } catch (error) {
     console.error('Erreur ordre:', error)
@@ -197,11 +140,9 @@ app.post('/api/order', async (req, res) => {
 
 app.delete('/api/order/:orderId', async (req, res) => {
   try {
-    if (!apiCredentials) return res.status(500).json({ error: 'API Key non initialisee' })
-    const headers = getOrderHeaders()
-    const response = await fetch(`${POLYMARKET_CLOB_URL}/order/${req.params.orderId}`, { method: 'DELETE', headers })
-    if (!response.ok) throw new Error('Erreur annulation')
-    res.json({ success: true, orderId: req.params.orderId })
+    if (!clobClient) return res.status(500).json({ error: 'CLOB client non initialise' })
+    const result = await clobClient.cancelOrder(req.params.orderId)
+    res.json({ success: true, orderId: req.params.orderId, result })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -209,11 +150,9 @@ app.delete('/api/order/:orderId', async (req, res) => {
 
 app.get('/api/orders', async (req, res) => {
   try {
-    if (!apiCredentials) await createApiKey()
-    const headers = getOrderHeaders()
-    const response = await fetch(`${POLYMARKET_CLOB_URL}/orders?open=true`, { headers })
-    if (!response.ok) throw new Error('Erreur ordres')
-    res.json(await response.json())
+    if (!clobClient) return res.status(500).json({ error: 'CLOB client non initialise' })
+    const orders = await clobClient.getOpenOrders()
+    res.json(orders)
   } catch (error) {
     res.status(500).json({ error: error.message })
   }
@@ -233,8 +172,9 @@ app.post('/api/approve-usdc', async (req, res) => {
 })
 
 // Demarrer
-initWallet()
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Backend demarre sur port ${PORT}`)
+  await initWallet()
   console.log('Wallet:', wallet ? wallet.address : 'NON CONFIGURE')
+  console.log('CLOB Client:', clobClient ? 'OK' : 'NON CONFIGURE')
 })
