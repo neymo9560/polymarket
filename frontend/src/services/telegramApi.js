@@ -27,12 +27,13 @@ export async function sendTelegramAlert(message) {
 }
 
 // Template court pour les trades gagnants
-export function formatWinAlert(trade, mode) {
+export function formatWinAlert(trade, mode, balance) {
   const modeEmoji = mode === 'live' ? '🔴 LIVE' : '📄 PAPER'
   const profit = trade.profit >= 0 ? `+$${trade.profit.toFixed(2)}` : `-$${Math.abs(trade.profit).toFixed(2)}`
+  const balanceStr = balance ? `\n💼 $${balance.toFixed(2)}` : ''
   
   return `${modeEmoji}
-💰 ${profit}
+💰 ${profit}${balanceStr}
 ${trade.market}
 ${trade.side} @ ${trade.price}`
 }

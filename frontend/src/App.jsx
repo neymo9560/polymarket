@@ -140,7 +140,9 @@ function App() {
       
       // ORDRE REMPLI: calculer le P&L basé sur le prix de sortie ASK
       const currentPrice = currentAskPrice
-      const pnl = (currentPrice - pos.entryPrice) * pos.size
+      // CALCUL CORRECT: size est en $, on doit convertir en tokens
+      const tokens = pos.size / pos.entryPrice
+      const pnl = (currentPrice - pos.entryPrice) * tokens
       
       // Vérifier Stop Loss, Take Profit, ou Timeout
       const hitStopLoss = pos.side === 'YES' 
@@ -188,8 +190,10 @@ function App() {
       
       // Ajouter les trades fermés et mettre à jour la balance
       positionsToClose.forEach(closedPos => {
-        const profit = closedPos.realizedPnl
-        const returnedValue = closedPos.size * closedPos.currentPrice
+        // CALCUL CORRECT: tokens = size$ / entryPrice
+        const tokens = closedPos.size / closedPos.entryPrice
+        const profit = (closedPos.currentPrice - closedPos.entryPrice) * tokens
+        const returnedValue = closedPos.size + profit // Capital initial + profit
         
         // Ajouter le trade fermé
         setTrades(prev => [{
@@ -223,12 +227,13 @@ function App() {
         
         // ENVOYER ALERTE TELEGRAM pour les gains
         if (profit > 0) {
+          const newBalance = botState.balance + returnedValue
           const alertMessage = formatWinAlert({
             profit,
             market: closedPos.marketSlug || closedPos.question || 'Trade',
             side: closedPos.side,
             price: closedPos.currentPrice?.toFixed(3) || '0'
-          }, botState.mode)
+          }, botState.mode, newBalance)
           sendTelegramAlert(alertMessage)
         }
       })
