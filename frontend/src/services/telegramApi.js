@@ -26,36 +26,72 @@ export async function sendTelegramAlert(message) {
   }
 }
 
-// Template court pour les trades gagnants
-export function formatWinAlert(trade, mode, balance) {
-  const modeEmoji = mode === 'live' ? '🔴 LIVE' : '📄 PAPER'
-  const profit = trade.profit >= 0 ? `+$${trade.profit.toFixed(2)}` : `-$${Math.abs(trade.profit).toFixed(2)}`
-  const balanceStr = balance ? `\n💼 $${balance.toFixed(2)}` : ''
+// ============================================================
+// TEMPLATES TELEGRAM - JOLIS ET EN FRANÇAIS
+// ============================================================
+
+// Template pour un trade gagnant
+export function formatWinAlert(trade, mode, balance, stats = {}) {
+  const header = mode === 'live' ? '🔴 RÉEL' : '� PAPER'
+  const profit = `+${trade.profit.toFixed(2)}$`
   
-  return `${modeEmoji}
-💰 ${profit}${balanceStr}
-${trade.market}
-${trade.side} @ ${trade.price}`
+  return `━━━━━━━━━━━━━━━
+${header} │ GAIN 💰
+━━━━━━━━━━━━━━━
+✅ ${profit}
+📊 ${trade.market?.slice(0, 25)}
+💼 Solde: ${balance?.toFixed(2) || '---'}$
+━━━━━━━━━━━━━━━`
 }
 
-// Template pour les pertes (optionnel)
-export function formatLossAlert(trade, mode) {
-  const modeEmoji = mode === 'live' ? '🔴 LIVE' : '📄 PAPER'
-  const loss = `−$${Math.abs(trade.profit).toFixed(2)}`
+// Template résumé avec P&L réalisé ET non réalisé
+export function formatStatusAlert(stats, mode) {
+  const header = mode === 'live' ? '🔴 RÉEL' : '🟢 PAPER'
+  const realizedPnl = stats.todayPnl >= 0 ? `+${stats.todayPnl.toFixed(2)}` : `${stats.todayPnl.toFixed(2)}`
+  const unrealizedPnl = stats.unrealizedPnl >= 0 ? `+${stats.unrealizedPnl.toFixed(2)}` : `${stats.unrealizedPnl.toFixed(2)}`
+  const totalPnl = stats.todayPnl + stats.unrealizedPnl
+  const totalStr = totalPnl >= 0 ? `+${totalPnl.toFixed(2)}` : `${totalPnl.toFixed(2)}`
   
-  return `${modeEmoji}
+  return `━━━━━━━━━━━━━━━
+${header} │ RÉSUMÉ 📈
+━━━━━━━━━━━━━━━
+💰 Réalisé: ${realizedPnl}$
+📊 En cours: ${unrealizedPnl}$
+📈 Total: ${totalStr}$
+━━━━━━━━━━━━━━━
+💼 Solde: ${stats.balance?.toFixed(2) || '---'}$
+🎯 Positions: ${stats.openPositions || 0}
+📊 Trades: ${stats.todayTrades || 0}
+━━━━━━━━━━━━━━━`
+}
+
+// Template pour perte (optionnel)
+export function formatLossAlert(trade, mode, balance) {
+  const header = mode === 'live' ? '🔴 RÉEL' : '� PAPER'
+  const loss = `-${Math.abs(trade.profit).toFixed(2)}$`
+  
+  return `━━━━━━━━━━━━━━━
+${header} │ PERTE 📉
+━━━━━━━━━━━━━━━
 ❌ ${loss}
-${trade.market}`
+📊 ${trade.market?.slice(0, 25)}
+💼 Solde: ${balance?.toFixed(2) || '---'}$
+━━━━━━━━━━━━━━━`
 }
 
-// Alerte résumé journalier
+// Résumé journalier
 export function formatDailySummary(stats, mode) {
-  const modeEmoji = mode === 'live' ? '🔴 LIVE' : '📄 PAPER'
-  const pnl = stats.totalPnl >= 0 ? `+$${stats.totalPnl.toFixed(2)}` : `-$${Math.abs(stats.totalPnl).toFixed(2)}`
+  const header = mode === 'live' ? '🔴 RÉEL' : '� PAPER'
+  const pnl = stats.totalPnl >= 0 ? `+${stats.totalPnl.toFixed(2)}` : `${stats.totalPnl.toFixed(2)}`
+  const winRate = stats.totalTrades > 0 ? ((stats.wins / stats.totalTrades) * 100).toFixed(0) : 0
   
-  return `${modeEmoji} RÉSUMÉ
-${pnl} | ${stats.wins}W/${stats.losses}L
-Balance: $${stats.balance.toFixed(2)}`
+  return `━━━━━━━━━━━━━━━
+${header} │ FIN DE JOURNÉE 🌙
+━━━━━━━━━━━━━━━
+💰 P&L: ${pnl}$
+📊 ${stats.wins}W / ${stats.losses}L (${winRate}%)
+💼 Solde: ${stats.balance.toFixed(2)}$
+━━━━━━━━━━━━━━━`
 }
 
 export default {
@@ -63,4 +99,5 @@ export default {
   formatWinAlert,
   formatLossAlert,
   formatDailySummary,
+  formatStatusAlert,
 }

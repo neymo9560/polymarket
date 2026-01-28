@@ -16,7 +16,7 @@ import {
   detectScalpingOpportunities 
 } from './services/polymarketApi'
 import { executeLiveTrade } from './services/tradingApi'
-import { sendTelegramAlert, formatWinAlert } from './services/telegramApi'
+import { sendTelegramAlert, formatWinAlert, formatStatusAlert } from './services/telegramApi'
 
 function App() {
   // Authentification
@@ -490,6 +490,32 @@ function App() {
       clearInterval(tradeInterval)
     }
   }, [botState.status, botState.activeStrategies])
+
+  // RÉSUMÉ TELEGRAM PÉRIODIQUE (toutes les 5 minutes)
+  useEffect(() => {
+    if (botState.status !== 'running') return
+    
+    // Envoyer un résumé toutes les 5 minutes
+    const statusInterval = setInterval(() => {
+      // Calculer le P&L non réalisé des positions ouvertes
+      const unrealizedPnl = openPositions.reduce((sum, pos) => {
+        return sum + (pos.unrealizedPnl || 0)
+      }, 0)
+      
+      const statusMessage = formatStatusAlert({
+        todayPnl: botState.todayPnl,
+        unrealizedPnl,
+        balance: botState.balance,
+        openPositions: openPositions.length,
+        todayTrades: botState.todayTrades,
+      }, botState.mode)
+      
+      sendTelegramAlert(statusMessage)
+      console.log('📱 Résumé Telegram envoyé')
+    }, 5 * 60 * 1000) // 5 minutes
+    
+    return () => clearInterval(statusInterval)
+  }, [botState.status, botState.todayPnl, botState.balance, openPositions])
 
   const toggleBot = () => {
     setBotState(prev => ({
