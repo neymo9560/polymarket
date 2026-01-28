@@ -274,6 +274,13 @@ function App() {
         
         console.log(`📊 Position fermée: ${closedPos.closeReason} | P&L: $${profit.toFixed(2)}`)
         
+        // EN MODE LIVE: Annuler l'ordre si encore pending
+        if (botState.mode === 'live' && closedPos.liveOrderId) {
+          cancelOrder(closedPos.liveOrderId)
+            .then(() => console.log('🔴 LIVE: Ordre annulé:', closedPos.liveOrderId))
+            .catch(() => console.log('Ordre déjà rempli ou annulé'))
+        }
+        
         // ENVOYER ALERTE TELEGRAM pour les gains
         if (profit > 0) {
           const newBalance = botState.balance + returnedValue
@@ -434,9 +441,15 @@ function App() {
       }
       
       // TROUVER LA PREMIÈRE OPPORTUNITÉ SUR UN MARCHÉ NON OUVERT
-      const opp = currentOpps.find(o => 
-        !currentPositions.some(p => p.marketId === o.market.id)
-      )
+      // Vérifier aussi les clobTokenIds pour éviter les doublons
+      const opp = currentOpps.find(o => {
+        const marketId = o.market.id || o.market.conditionId
+        const tokenIds = o.market.clobTokenIds || []
+        return !currentPositions.some(p => 
+          p.marketId === marketId || 
+          (tokenIds.length > 0 && p.clobTokenIds?.some(t => tokenIds.includes(t)))
+        )
+      })
       
       if (!opp) {
         console.log('⏭️ Toutes les opportunités ont déjà des positions ouvertes')
