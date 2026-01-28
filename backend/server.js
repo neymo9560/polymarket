@@ -3,10 +3,14 @@
  * La clé privée reste ICI (côté serveur), jamais exposée au frontend
  */
 
+console.log('🚀 Démarrage du backend...')
+
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import { ethers } from 'ethers'
+
+console.log('📦 Modules importés')
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -36,18 +40,25 @@ let usdc = null
 let apiCredentials = null
 
 function initWallet() {
-  const privateKey = process.env.PRIVATE_KEY
-  if (!privateKey) {
-    console.error('❌ PRIVATE_KEY non définie dans les variables d\'environnement')
+  try {
+    const privateKey = process.env.PRIVATE_KEY
+    console.log('🔑 PRIVATE_KEY présente:', !!privateKey)
+    
+    if (!privateKey) {
+      console.error('❌ PRIVATE_KEY non définie dans les variables d\'environnement')
+      return false
+    }
+    
+    provider = new ethers.JsonRpcProvider(POLYGON_RPC)
+    wallet = new ethers.Wallet(privateKey, provider)
+    usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, wallet)
+    
+    console.log(`🔐 Wallet connecté: ${wallet.address}`)
+    return true
+  } catch (error) {
+    console.error('❌ Erreur init wallet:', error.message)
     return false
   }
-  
-  provider = new ethers.JsonRpcProvider(POLYGON_RPC)
-  wallet = new ethers.Wallet(privateKey, provider)
-  usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, wallet)
-  
-  console.log(`🔐 Wallet connecté: ${wallet.address}`)
-  return true
 }
 
 // Générer les headers d'auth pour Polymarket
