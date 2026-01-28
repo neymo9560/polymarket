@@ -110,15 +110,42 @@ app.get('/api/wallet', async (req, res) => {
   }
 })
 
+// Proxy orderbook
+app.get('/api/orderbook', async (req, res) => {
+  try {
+    const { token_id } = req.query
+    if (!token_id || token_id === '[') {
+      return res.status(400).json({ error: 'token_id invalide' })
+    }
+    const url = `https://clob.polymarket.com/book?token_id=${token_id}`
+    const response = await fetch(url)
+    if (!response.ok) return res.status(404).json({ error: 'Orderbook non disponible' })
+    res.json(await response.json())
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
 app.post('/api/order', async (req, res) => {
   try {
-    if (!clobClient) return res.status(500).json({ error: 'CLOB client non initialise' })
-    const { tokenId, side, price, size } = req.body
-    if (!tokenId || !side || !price || !size) {
-      return res.status(400).json({ error: 'Parametres manquants' })
+    if (!clobClient) {
+      console.log('CLOB client non initialise')
+      return res.status(500).json({ error: 'CLOB client non initialise - verifier PRIVATE_KEY' })
     }
     
-    console.log('Ordre via SDK:', side, size, '@', price)
+    const { tokenId, side, price, size } = req.body
+    console.log('Ordre recu:', { tokenId, side, price, size })
+    
+    if (!tokenId || !side || !price || !size) {
+      return res.status(400).json({ error: 'Parametres manquants: tokenId, side, price, size' })
+    }
+    
+    // Validation tokenId
+    if (typeof tokenId !== 'string' || tokenId.length < 10) {
+      return res.status(400).json({ error: 'tokenId invalide' })
+    }
+    
+    console.log('Ordre via SDK:', side, size, '@', price, 'token:', tokenId.substring(0, 20))
     
     // Utiliser le SDK officiel pour créer l'ordre
     const order = await clobClient.createOrder({
@@ -128,13 +155,15 @@ app.post('/api/order', async (req, res) => {
       size: parseFloat(size)
     })
     
+    console.log('Ordre cree:', order)
+    
     // Poster l'ordre
     const result = await clobClient.postOrder(order)
-    console.log('Ordre place via SDK:', result)
+    console.log('Ordre poste:', result)
     res.json(result)
   } catch (error) {
-    console.error('Erreur ordre:', error)
-    res.status(500).json({ error: error.message })
+    console.error('Erreur ordre complete:', error)
+    res.status(500).json({ error: error.message || 'Erreur inconnue' })
   }
 })
 
