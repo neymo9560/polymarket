@@ -16,6 +16,7 @@ import {
   detectScalpingOpportunities 
 } from './services/polymarketApi'
 import { executeLiveTrade } from './services/tradingApi'
+import { sendTelegramAlert, formatWinAlert } from './services/telegramApi'
 
 function App() {
   // Authentification
@@ -207,6 +208,17 @@ function App() {
         }))
         
         console.log(`📊 Position fermée: ${closedPos.closeReason} | P&L: $${profit.toFixed(2)}`)
+        
+        // ENVOYER ALERTE TELEGRAM pour les gains
+        if (profit > 0) {
+          const alertMessage = formatWinAlert({
+            profit,
+            market: closedPos.marketSlug || closedPos.question || 'Trade',
+            side: closedPos.side,
+            price: closedPos.currentPrice?.toFixed(3) || '0'
+          }, botState.mode)
+          sendTelegramAlert(alertMessage)
+        }
       })
     } else {
       setOpenPositions(updatedPositions)

@@ -336,6 +336,61 @@ async fn get_balance() -> impl IntoResponse {
     (StatusCode::OK, Json(response)).into_response()
 }
 
+// ============================================================
+// TELEGRAM ALERTS
+// Envoie des notifications via bot Telegram
+// Nécessite TELEGRAM_BOT_TOKEN et TELEGRAM_CHAT_ID
+// ============================================================
+
+#[derive(Deserialize)]
+struct TelegramMessage {
+    message: String,
+}
+
+async fn send_telegram(Json(req): Json<TelegramMessage>) -> impl IntoResponse {
+    let bot_token = match env::var("TELEGRAM_BOT_TOKEN") {
+        Ok(token) => token,
+        Err(_) => return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "TELEGRAM_BOT_TOKEN non configuré"}))
+        ).into_response(),
+    };
+    
+    let chat_id = match env::var("TELEGRAM_CHAT_ID") {
+        Ok(id) => id,
+        Err(_) => return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "TELEGRAM_CHAT_ID non configuré"}))
+        ).into_response(),
+    };
+    
+    let url = format!(
+        "https://api.telegram.org/bot{}/sendMessage",
+        bot_token
+    );
+    
+    let client = reqwest::Client::new();
+    let result = client.post(&url)
+        .json(&serde_json::json!({
+            "chat_id": chat_id,
+            "text": req.message,
+            "parse_mode": "HTML"
+        }))
+        .send()
+        .await;
+    
+    match result {
+        Ok(resp) => {
+            if resp.status().is_success() {
+                (StatusCode::OK, Json(serde_json::json!({"success": true}))).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Telegram API error"}))).into_response()
+            }
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "Failed to send"}))).into_response(),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -369,6 +424,8 @@ async fn main() {
         .route("/api/orders/open", get(get_open_orders))
         .route("/api/trades", get(get_trades_history))
         .route("/api/balance", get(get_balance))
+        // Telegram alerts
+        .route("/api/telegram/send", axum::routing::post(send_telegram))
         .layer(cors);
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
