@@ -104,27 +104,43 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
+    // Proxy wallet Polymarket de l'utilisateur
+    const PROXY_WALLET = '0x14f9f76863b57e89f2d482557828337234dcacad'
+    
     let usdcBalance = 0
     
-    // Récupérer le solde depuis Polymarket (proxy wallet)
-    if (clobClient) {
-      try {
-        const balanceData = await clobClient.getBalanceAllowance({ asset_type: 'USDC' })
-        console.log('Polymarket balance data:', balanceData)
-        if (balanceData && balanceData.balance) {
-          usdcBalance = parseFloat(balanceData.balance) / 1e6
-        }
-      } catch (e) {
-        console.log('Erreur balance Polymarket:', e.message)
+    // Lire le solde USDC depuis le proxy wallet via JSON-RPC
+    try {
+      const balanceOfData = '0x70a08231000000000000000000000000' + PROXY_WALLET.slice(2).toLowerCase()
+      const rpcCall = {
+        jsonrpc: '2.0',
+        method: 'eth_call',
+        params: [{ to: USDC_ADDRESS, data: balanceOfData }, 'latest'],
+        id: 1
       }
+      
+      const response = await fetch('https://polygon-rpc.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rpcCall)
+      })
+      const data = await response.json()
+      console.log('Proxy wallet USDC response:', data)
+      
+      if (data.result && data.result !== '0x') {
+        usdcBalance = parseInt(data.result, 16) / 1e6
+      }
+    } catch (e) {
+      console.log('Erreur lecture proxy wallet:', e.message)
     }
     
-    console.log('Wallet:', wallet.address, 'USDC (Polymarket):', usdcBalance)
+    console.log('Wallet:', wallet.address, 'Proxy:', PROXY_WALLET, 'USDC:', usdcBalance)
     
     res.json({
       address: wallet.address,
+      proxyWallet: PROXY_WALLET,
       usdcBalance,
-      maticBalance: 0.1, // Assumé suffisant pour gas
+      maticBalance: 0.1,
       hasGas: true
     })
   } catch (error) {
