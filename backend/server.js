@@ -50,16 +50,41 @@ function initWallet() {
   }
 }
 
-// Auth headers pour Polymarket
+// Auth headers pour Polymarket (EIP-712)
 async function getAuthHeaders() {
-  const timestamp = Math.floor(Date.now() / 1000)
-  const message = `polymarket:${timestamp}`
-  const signature = await wallet.signMessage(message)
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const nonce = 0
+  
+  // EIP-712 Domain
+  const domain = {
+    name: 'ClobAuthDomain',
+    version: '1',
+    chainId: 137 // Polygon
+  }
+  
+  const types = {
+    ClobAuth: [
+      { name: 'address', type: 'address' },
+      { name: 'timestamp', type: 'string' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'message', type: 'string' }
+    ]
+  }
+  
+  const value = {
+    address: wallet.address,
+    timestamp: timestamp,
+    nonce: nonce,
+    message: 'This message attests that I control the given wallet'
+  }
+  
+  const signature = await wallet.signTypedData(domain, types, value)
+  
   return {
     'POLY_ADDRESS': wallet.address,
     'POLY_SIGNATURE': signature,
-    'POLY_TIMESTAMP': timestamp.toString(),
-    'POLY_NONCE': '0'
+    'POLY_TIMESTAMP': timestamp,
+    'POLY_NONCE': nonce.toString()
   }
 }
 
