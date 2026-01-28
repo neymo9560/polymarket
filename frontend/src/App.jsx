@@ -17,6 +17,7 @@ import {
 } from './services/polymarketApi'
 import { executeLiveTrade } from './services/tradingApi'
 import { sendTelegramAlert, formatWinAlert, formatStatusAlert } from './services/telegramApi'
+import { saveBotState, loadBotState } from './services/supabaseClient'
 
 function App() {
   // Authentification
@@ -523,6 +524,38 @@ function App() {
     
     return () => clearInterval(statusInterval)
   }, [botState.status, botState.todayPnl, botState.balance, openPositions])
+
+  // PERSISTANCE SUPABASE - Sauvegarder toutes les 30 sec
+  useEffect(() => {
+    const userId = localStorage.getItem('polybot_user_id') || 'default'
+    
+    // Charger l'état au démarrage
+    loadBotState(userId).then(data => {
+      if (data) {
+        console.log('📥 État chargé depuis Supabase')
+        if (data.bot_state) setBotState(prev => ({ ...prev, ...data.bot_state }))
+        if (data.open_positions) setOpenPositions(data.open_positions)
+        if (data.trades) setTrades(data.trades)
+      }
+    })
+    
+    // Sauvegarder périodiquement
+    const saveInterval = setInterval(() => {
+      saveBotState(userId, botState, openPositions, trades)
+      console.log('💾 État sauvegardé dans Supabase')
+    }, 30000) // 30 secondes
+    
+    // Sauvegarder avant de quitter la page
+    const handleBeforeUnload = () => {
+      saveBotState(userId, botState, openPositions, trades)
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    
+    return () => {
+      clearInterval(saveInterval)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [botState, openPositions, trades])
 
   const toggleBot = () => {
     setBotState(prev => ({
