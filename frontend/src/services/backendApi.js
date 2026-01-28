@@ -17,10 +17,17 @@ export async function checkBackendHealth() {
   }
 }
 
-// Obtenir les infos du wallet
+// Obtenir les infos du wallet (avec timeout)
 export async function getWalletInfo() {
   try {
-    const response = await fetch(`${BACKEND_URL}/api/wallet`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+    
+    const response = await fetch(`${BACKEND_URL}/api/wallet`, {
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
+    
     if (!response.ok) throw new Error('Erreur wallet')
     return await response.json()
   } catch (error) {
