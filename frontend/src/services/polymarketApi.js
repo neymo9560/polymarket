@@ -22,8 +22,36 @@ export async function fetchMarkets(limit = 50) {
     // Transformer les données pour notre format
     return data.map(market => {
       const id = market.conditionId || market.id
-      const yesPrice = parseFloat(market.outcomePrices?.[0] || market.bestBid || 0.5)
-      const noPrice = parseFloat(market.outcomePrices?.[1] || market.bestAsk || 0.5)
+      
+      // Parser les prix - Polymarket peut retourner string ou array
+      let yesPrice = 0.5
+      let noPrice = 0.5
+      
+      if (market.outcomePrices) {
+        // Format: "[\"0.45\",\"0.55\"]" ou ["0.45","0.55"] ou {0: "0.45", 1: "0.55"}
+        try {
+          let prices = market.outcomePrices
+          if (typeof prices === 'string') {
+            prices = JSON.parse(prices)
+          }
+          if (Array.isArray(prices)) {
+            yesPrice = parseFloat(prices[0]) || 0.5
+            noPrice = parseFloat(prices[1]) || 0.5
+          }
+        } catch (e) {
+          console.warn('Error parsing outcomePrices:', market.outcomePrices)
+        }
+      } else if (market.bestBid !== undefined) {
+        yesPrice = parseFloat(market.bestBid) || 0.5
+        noPrice = 1 - yesPrice
+      } else if (market.price !== undefined) {
+        yesPrice = parseFloat(market.price) || 0.5
+        noPrice = 1 - yesPrice
+      }
+      
+      // S'assurer que les prix sont valides
+      if (isNaN(yesPrice) || yesPrice < 0 || yesPrice > 1) yesPrice = 0.5
+      if (isNaN(noPrice) || noPrice < 0 || noPrice > 1) noPrice = 0.5
       
       // Sauvegarder l'historique des prix
       if (!priceHistory.has(id)) {
@@ -33,22 +61,29 @@ export async function fetchMarkets(limit = 50) {
       history.push({ yesPrice, noPrice, timestamp: Date.now() })
       if (history.length > HISTORY_LENGTH) history.shift()
       
+      // Parser le volume de manière robuste
+      const parseVolume = (v) => {
+        if (!v) return 0
+        const parsed = parseFloat(v)
+        return isNaN(parsed) ? 0 : parsed
+      }
+      
       return {
         id,
-        slug: market.slug,
-        question: market.question,
-        description: market.description,
-        category: market.category || 'Other',
+        slug: market.slug || market.market_slug || id,
+        question: market.question || market.title || 'Unknown Market',
+        description: market.description || '',
+        category: market.category || market.groupItemTitle || 'Other',
         
-        // Prix YES/NO
+        // Prix YES/NO (déjà validés)
         yesPrice,
         noPrice,
         spread: Math.abs(1 - yesPrice - noPrice),
         
         // Volume et liquidité
-        volume: parseFloat(market.volume || 0),
-        volume24h: parseFloat(market.volume24hr || 0),
-        liquidity: parseFloat(market.liquidity || 0),
+        volume: parseVolume(market.volume),
+        volume24h: parseVolume(market.volume24hr) || parseVolume(market.volume),
+        liquidity: parseVolume(market.liquidity),
         
         // Tokens CLOB
         clobTokenIds: market.clobTokenIds || [],

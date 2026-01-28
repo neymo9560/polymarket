@@ -26,7 +26,7 @@ export default function MarketsPanel({ markets }) {
           markets.slice(0, 15).map((market) => (
             <a
               key={market.id}
-              href={`https://polymarket.com/event/${market.slug}`}
+              href={market.slug ? `https://polymarket.com/event/${market.slug}` : `https://polymarket.com`}
               target="_blank"
               rel="noopener noreferrer"
               className="block p-3 rounded bg-hl-card-light hover:bg-hl-hover transition-colors cursor-pointer group"
@@ -48,18 +48,22 @@ export default function MarketsPanel({ markets }) {
                   <div className="flex items-center gap-1">
                     <span className="text-xxs text-hl-text-muted">YES</span>
                     <span className="text-sm font-mono text-hl-green font-medium">
-                      {(market.yesPrice * 100).toFixed(1)}¢
+                      {typeof market.yesPrice === 'number' && !isNaN(market.yesPrice) 
+                        ? `${(market.yesPrice * 100).toFixed(0)}¢` 
+                        : '50¢'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-xxs text-hl-text-muted">NO</span>
                     <span className="text-sm font-mono text-hl-red font-medium">
-                      {(market.noPrice * 100).toFixed(1)}¢
+                      {typeof market.noPrice === 'number' && !isNaN(market.noPrice) 
+                        ? `${(market.noPrice * 100).toFixed(0)}¢` 
+                        : '50¢'}
                     </span>
                   </div>
                 </div>
                 <div className="text-xs text-hl-text-muted">
-                  {formatVolume(market.volume24h || market.volume)}
+                  {formatVolume(market.volume24h || market.volume || 0)}
                 </div>
               </div>
             </a>
