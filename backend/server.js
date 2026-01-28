@@ -104,34 +104,41 @@ app.get('/api/wallet', async (req, res) => {
   try {
     if (!wallet) return res.status(500).json({ error: 'Wallet non initialise' })
     
-    // Essayer plusieurs RPCs pour obtenir le solde
-    const rpcs = [
-      'https://polygon-mainnet.infura.io/v3/84842078b09946638c03157f83405213',
-      'https://polygon-bor-rpc.publicnode.com',
-      'https://polygon.drpc.org'
-    ]
+    const address = wallet.address.toLowerCase()
     
-    let usdcBalance = 0
-    let maticBalance = 0
-    
-    for (const rpc of rpcs) {
-      try {
-        const tempProvider = new ethers.providers.JsonRpcProvider(rpc)
-        const tempUsdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, tempProvider)
-        
-        const [usdcRaw, maticRaw] = await Promise.all([
-          tempUsdc.balanceOf(wallet.address),
-          tempProvider.getBalance(wallet.address)
-        ])
-        
-        usdcBalance = parseFloat(ethers.utils.formatUnits(usdcRaw, 6))
-        maticBalance = parseFloat(ethers.utils.formatEther(maticRaw))
-        console.log('Balances from', rpc, ':', { usdcBalance, maticBalance })
-        break
-      } catch (e) {
-        console.log('RPC failed:', rpc, e.message)
-      }
+    // Appel JSON-RPC direct pour MATIC
+    const maticCall = {
+      jsonrpc: '2.0',
+      method: 'eth_getBalance',
+      params: [address, 'latest'],
+      id: 1
     }
+    
+    // Appel JSON-RPC direct pour USDC (balanceOf)
+    const balanceOfData = '0x70a08231000000000000000000000000' + address.slice(2)
+    const usdcCall = {
+      jsonrpc: '2.0',
+      method: 'eth_call',
+      params: [{ to: USDC_ADDRESS, data: balanceOfData }, 'latest'],
+      id: 2
+    }
+    
+    const rpc = 'https://polygon-mainnet.infura.io/v3/84842078b09946638c03157f83405213'
+    
+    const [maticRes, usdcRes] = await Promise.all([
+      fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(maticCall) }),
+      fetch(rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(usdcCall) })
+    ])
+    
+    const maticData = await maticRes.json()
+    const usdcData = await usdcRes.json()
+    
+    console.log('RPC responses:', { maticData, usdcData })
+    
+    const maticBalance = maticData.result ? parseInt(maticData.result, 16) / 1e18 : 0
+    const usdcBalance = usdcData.result ? parseInt(usdcData.result, 16) / 1e6 : 0
+    
+    console.log('Wallet balances:', { address, usdcBalance, maticBalance })
     
     res.json({
       address: wallet.address,
