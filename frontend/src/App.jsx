@@ -464,10 +464,11 @@ function App() {
       setOpenPositions(prev => [...prev, newPosition])
       
       // Déduire le coût de la balance
-      const cost = tradeSize * entryPrice
+      // tradeSize est DÉJÀ en $ (ex: $15 = 5% de $300)
+      // Pas besoin de multiplier par le prix!
       setBotState(prev => ({
         ...prev,
-        balance: prev.balance - cost,
+        balance: prev.balance - tradeSize,
         openPositions: prev.openPositions + 1,
       }))
       
