@@ -8,6 +8,7 @@ import OpportunitiesPanel from './components/OpportunitiesPanel'
 import LoginScreen from './components/LoginScreen'
 import SettingsPanel from './components/SettingsPanel'
 import PnLCard from './components/PnLCard'
+import StrategyAnalytics from './components/StrategyAnalytics'
 import { 
   fetchMarkets, 
   fetchRealPrices,
@@ -650,6 +651,7 @@ function App() {
               toggleStrategy={toggleStrategy}
             />
             <OpportunitiesPanel opportunities={opportunities} />
+            <StrategyAnalytics trades={trades} openPositions={openPositions} />
             <TradesHistory trades={trades} />
           </div>
 
