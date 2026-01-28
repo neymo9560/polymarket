@@ -235,12 +235,22 @@ function App() {
         // ENVOYER ALERTE TELEGRAM pour les gains
         if (profit > 0) {
           const newBalance = botState.balance + returnedValue
+          const openValue = updatedPositions.reduce((sum, p) => sum + (p.size || 0), 0)
+          const unrealizedPnl = updatedPositions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0)
+          
           const alertMessage = formatWinAlert({
             profit,
             market: closedPos.marketSlug || closedPos.question || 'Trade',
-            side: closedPos.side,
-            price: closedPos.currentPrice?.toFixed(3) || '0'
-          }, botState.mode, newBalance)
+          }, botState.mode, {
+            balance: newBalance,
+            openValue,
+            unrealizedPnl,
+            todayPnl: botState.todayPnl + profit,
+            openPositions: updatedPositions.length,
+            totalTrades: botState.totalTrades + 1,
+            wins: (botState.wins || 0) + 1,
+            startingBalance: botState.startingBalance,
+          })
           sendTelegramAlert(alertMessage)
         }
       })
@@ -505,17 +515,21 @@ function App() {
     
     // Envoyer un résumé toutes les 5 minutes
     const statusInterval = setInterval(() => {
-      // Calculer le P&L non réalisé des positions ouvertes
-      const unrealizedPnl = openPositions.reduce((sum, pos) => {
-        return sum + (pos.unrealizedPnl || 0)
-      }, 0)
+      // Calculer les stats complètes
+      const openValue = openPositions.reduce((sum, p) => sum + (p.size || 0), 0)
+      const unrealizedPnl = openPositions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0)
       
       const statusMessage = formatStatusAlert({
-        todayPnl: botState.todayPnl,
-        unrealizedPnl,
         balance: botState.balance,
+        openValue,
+        unrealizedPnl,
+        todayPnl: botState.todayPnl,
         openPositions: openPositions.length,
         todayTrades: botState.todayTrades,
+        totalTrades: botState.totalTrades,
+        wins: botState.wins || 0,
+        losses: botState.losses || 0,
+        startingBalance: botState.startingBalance,
       }, botState.mode)
       
       sendTelegramAlert(statusMessage)
