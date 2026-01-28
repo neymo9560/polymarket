@@ -541,14 +541,16 @@ function App() {
     return () => clearInterval(statusInterval)
   }, [botState.status, botState.todayPnl, botState.balance, openPositions])
 
+  // ID PARTAGÉ - Tout le monde voit le même état
+  const SHARED_USER_ID = 'polybot_shared'
+  
   // PERSISTANCE SUPABASE - Charger UNE SEULE FOIS au démarrage
   const supabaseLoadedRef = useRef(false)
   useEffect(() => {
     if (supabaseLoadedRef.current) return
     supabaseLoadedRef.current = true
     
-    const userId = localStorage.getItem('polybot_user_id') || 'default'
-    loadBotState(userId).then(data => {
+    loadBotState(SHARED_USER_ID).then(data => {
       if (data) {
         console.log('📥 État chargé depuis Supabase')
         if (data.bot_state) setBotState(prev => ({ ...prev, ...data.bot_state }))
@@ -558,7 +560,7 @@ function App() {
     })
   }, [])
   
-  // Sauvegarder périodiquement (séparé du chargement)
+  // Sauvegarder périodiquement (séparé du chargement) - ADMIN SEULEMENT
   const botStateRef = useRef(botState)
   const openPositionsRef2 = useRef(openPositions)
   const tradesRef = useRef(trades)
@@ -568,23 +570,38 @@ function App() {
   useEffect(() => { tradesRef.current = trades }, [trades])
   
   useEffect(() => {
-    const userId = localStorage.getItem('polybot_user_id') || 'default'
-    
-    const saveInterval = setInterval(() => {
-      saveBotState(userId, botStateRef.current, openPositionsRef2.current, tradesRef.current)
-      console.log('💾 État sauvegardé dans Supabase')
-    }, 30000)
-    
-    const handleBeforeUnload = () => {
-      saveBotState(userId, botStateRef.current, openPositionsRef2.current, tradesRef.current)
+    if (isAdmin) {
+      // Admin sauvegarde toutes les 30s
+      const saveInterval = setInterval(() => {
+        saveBotState(SHARED_USER_ID, botStateRef.current, openPositionsRef2.current, tradesRef.current)
+        console.log('💾 État sauvegardé dans Supabase')
+      }, 30000)
+      
+      const handleBeforeUnload = () => {
+        saveBotState(SHARED_USER_ID, botStateRef.current, openPositionsRef2.current, tradesRef.current)
+      }
+      window.addEventListener('beforeunload', handleBeforeUnload)
+      
+      return () => {
+        clearInterval(saveInterval)
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+      }
+    } else {
+      // Viewer recharge toutes les 10s pour voir les updates
+      const refreshInterval = setInterval(() => {
+        loadBotState(SHARED_USER_ID).then(data => {
+          if (data) {
+            if (data.bot_state) setBotState(prev => ({ ...prev, ...data.bot_state }))
+            if (data.open_positions) setOpenPositions(data.open_positions)
+            if (data.trades) setTrades(data.trades)
+            console.log('🔄 État rafraîchi depuis Supabase')
+          }
+        })
+      }, 10000) // 10 secondes
+      
+      return () => clearInterval(refreshInterval)
     }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    
-    return () => {
-      clearInterval(saveInterval)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-    }
-  }, [])
+  }, [isAdmin])
 
   const toggleBot = () => {
     setBotState(prev => ({
