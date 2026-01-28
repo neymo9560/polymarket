@@ -1,59 +1,64 @@
 /**
  * BACKEND SÉCURISÉ - Trading Polymarket
- * La clé privée reste ICI (côté serveur), jamais exposée au frontend
  */
 
-console.log('🚀 Démarrage du backend...')
-
-import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import { ethers } from 'ethers'
-
-console.log('📦 Modules importés')
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
-// Middleware
 app.use(cors())
 app.use(express.json())
 
 // Configuration Polygon
 const POLYGON_RPC = 'https://polygon-rpc.com'
 const POLYMARKET_CLOB_URL = 'https://clob.polymarket.com'
-
-// Contrats
 const USDC_ADDRESS = '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
 const CTF_EXCHANGE = '0x4D97DCd97eC945f40cF65F87097ACe5EA0476045'
 
-const USDC_ABI = [
-  'function balanceOf(address) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)'
-]
-
-// Initialiser le wallet (clé privée depuis variable d'environnement)
 let wallet = null
 let provider = null
 let usdc = null
 let apiCredentials = null
+let ethers = null
 
-function initWallet() {
+// Init ethers dynamiquement
+async function initEthers() {
   try {
+    const ethersModule = await import('ethers')
+    ethers = ethersModule
+    console.log('✅ Ethers chargé')
+    return true
+  } catch (err) {
+    console.error('❌ Erreur chargement ethers:', err.message)
+    return false
+  }
+}
+
+async function initWallet() {
+  try {
+    if (!ethers) await initEthers()
+    
     const privateKey = process.env.PRIVATE_KEY
     console.log('🔑 PRIVATE_KEY présente:', !!privateKey)
     
     if (!privateKey) {
-      console.error('❌ PRIVATE_KEY non définie dans les variables d\'environnement')
+      console.error('❌ PRIVATE_KEY non définie')
       return false
     }
     
     provider = new ethers.JsonRpcProvider(POLYGON_RPC)
     wallet = new ethers.Wallet(privateKey, provider)
+    
+    const USDC_ABI = [
+      'function balanceOf(address) view returns (uint256)',
+      'function approve(address spender, uint256 amount) returns (bool)',
+      'function allowance(address owner, address spender) view returns (uint256)'
+    ]
     usdc = new ethers.Contract(USDC_ADDRESS, USDC_ABI, wallet)
     
-    console.log(`🔐 Wallet connecté: ${wallet.address}`)
+    console.log(`🔐 Wallet: ${wallet.address}`)
     return true
   } catch (error) {
     console.error('❌ Erreur init wallet:', error.message)
@@ -259,10 +264,9 @@ app.post('/api/approve-usdc', async (req, res) => {
   }
 })
 
-// Démarrer le serveur
-initWallet()
-
-app.listen(PORT, () => {
-  console.log(`🚀 Backend sécurisé démarré sur le port ${PORT}`)
-  console.log(`📍 Wallet: ${wallet ? wallet.address : 'NON CONFIGURÉ'}`)
+// Démarrer le serveur IMMÉDIATEMENT
+app.listen(PORT, async () => {
+  console.log(`🚀 Backend démarré sur port ${PORT}`)
+  // Init wallet en arrière-plan
+  await initWallet()
 })
