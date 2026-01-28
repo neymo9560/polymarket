@@ -4,8 +4,10 @@ import ControlPanel from './components/ControlPanel'
 import MarketsPanel from './components/MarketsPanel'
 import StrategiesPanel from './components/StrategiesPanel'
 import TradesHistory from './components/TradesHistory'
-import PerformancePanel from './components/PerformancePanel'
 import OpportunitiesPanel from './components/OpportunitiesPanel'
+import LoginScreen from './components/LoginScreen'
+import SettingsPanel from './components/SettingsPanel'
+import PnLCard from './components/PnLCard'
 import { 
   fetchMarkets, 
   detectArbitrageOpportunities, 
@@ -14,6 +16,11 @@ import {
 } from './services/polymarketApi'
 
 function App() {
+  // Authentification
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('polybot_auth') === 'true'
+  })
+
   const [botState, setBotState] = useState(() => {
     const saved = localStorage.getItem('polybot_state')
     if (saved) {
@@ -370,6 +377,38 @@ function App() {
     }))
   }
 
+  // Reset toutes les stats
+  const resetStats = () => {
+    const startingBalance = botState.startingBalance || 300
+    setBotState({
+      mode: 'paper',
+      status: 'stopped',
+      balance: startingBalance,
+      startingBalance: startingBalance,
+      totalPnl: 0,
+      todayPnl: 0,
+      totalTrades: 0,
+      todayTrades: 0,
+      openPositions: 0,
+      activeStrategies: [],
+    })
+    setTrades([])
+    setOpenPositions([])
+    localStorage.removeItem('polybot_trades')
+    localStorage.removeItem('polybot_positions')
+  }
+
+  // Déconnexion
+  const handleLogout = () => {
+    localStorage.removeItem('polybot_auth')
+    setIsAuthenticated(false)
+  }
+
+  // Écran de login si non authentifié
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />
+  }
+
   return (
     <div className="min-h-screen bg-hl-bg">
       <Header botState={botState} wsConnected={wsConnected} />
@@ -396,30 +435,33 @@ function App() {
             <TradesHistory trades={trades} />
           </div>
 
-          {/* Colonne droite - Performance */}
+          {/* Colonne droite - P&L et Paramètres */}
           <div className="lg:col-span-3 space-y-4">
-            <PerformancePanel botState={botState} trades={trades} />
+            {/* P&L Card - Le plus important */}
+            <PnLCard botState={botState} trades={trades} />
+            
+            {/* Paramètres */}
+            <SettingsPanel 
+              botState={botState} 
+              setBotState={setBotState}
+              onReset={resetStats}
+            />
+            
             {/* Status connexion */}
             <div className="hl-card p-4">
               <h3 className="text-sm font-semibold text-hl-text-secondary mb-3 uppercase tracking-wider">
-                Connexion Polymarket
+                Connexion
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-hl-text-muted">API Status</span>
+                  <span className="text-hl-text-muted">API</span>
                   <span className={wsConnected ? 'text-hl-green' : 'text-hl-red'}>
-                    {wsConnected ? '● Connecté' : '○ Déconnecté'}
+                    {wsConnected ? '● Live' : '○ Offline'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-hl-text-muted">Marchés chargés</span>
+                  <span className="text-hl-text-muted">Marchés</span>
                   <span className="text-white font-mono">{markets.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-hl-text-muted">Dernière MAJ</span>
-                  <span className="text-hl-text-secondary text-xs font-mono">
-                    {lastUpdate ? lastUpdate.toLocaleTimeString() : '-'}
-                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-hl-text-muted">Mode</span>
@@ -433,6 +475,14 @@ function App() {
                   </div>
                 )}
               </div>
+              
+              {/* Bouton déconnexion */}
+              <button
+                onClick={handleLogout}
+                className="w-full mt-4 py-2 text-xs text-hl-text-muted hover:text-hl-red border border-hl-border hover:border-hl-red rounded transition-all"
+              >
+                Se déconnecter
+              </button>
             </div>
           </div>
         </div>
