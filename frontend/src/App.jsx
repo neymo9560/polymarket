@@ -19,7 +19,7 @@ import {
 import { executeLiveTrade } from './services/tradingApi'
 import { sendTelegramAlert, formatWinAlert, formatStatusAlert } from './services/telegramApi'
 import { saveBotState, loadBotState } from './services/supabaseClient'
-import { initLiveTrading, getLiveInstance } from './services/polymarketLive'
+import { checkBackendHealth, getWalletInfo, placeLimitOrder } from './services/backendApi'
 
 function App() {
   // Authentification
@@ -71,29 +71,30 @@ function App() {
   const [lastUpdate, setLastUpdate] = useState(null)
   const [error, setError] = useState(null)
   
-  // Trading LIVE
-  const [liveWallet, setLiveWallet] = useState(null)
-  const [liveBalance, setLiveBalance] = useState({ usdc: 0, matic: 0 })
+  // Trading LIVE via backend sécurisé
+  const [backendConnected, setBackendConnected] = useState(false)
+  const [liveWalletInfo, setLiveWalletInfo] = useState(null)
   
   const intervalRef = useRef(null)
   
-  // Initialiser le trading LIVE si clé privée disponible
+  // Vérifier la connexion au backend sécurisé
   useEffect(() => {
-    const privateKey = import.meta.env.VITE_PRIVATE_KEY
-    if (privateKey && !liveWallet) {
-      try {
-        const live = initLiveTrading(privateKey)
-        setLiveWallet(live)
+    checkBackendHealth().then(health => {
+      if (health && health.wallet) {
+        setBackendConnected(true)
+        console.log('🔐 Backend sécurisé connecté:', health.wallet)
         
-        // Récupérer les balances
-        live.getAccountSummary().then(summary => {
-          setLiveBalance({ usdc: summary.usdcBalance, matic: summary.maticBalance })
-          console.log('💰 Wallet LIVE connecté:', summary)
+        // Récupérer les infos du wallet
+        getWalletInfo().then(info => {
+          if (info) {
+            setLiveWalletInfo(info)
+            console.log('💰 Wallet LIVE:', info)
+          }
         })
-      } catch (err) {
-        console.error('Erreur init wallet LIVE:', err)
+      } else {
+        console.log('⚠️ Backend non connecté - Mode PAPER uniquement')
       }
-    }
+    })
   }, [])
 
   // Sauvegarder l'état du bot dans localStorage
@@ -519,8 +520,8 @@ function App() {
         maxHoldTime: 60000, // 60 secondes max (comme les pros, pas 3 min)
       }
       
-      // EN MODE LIVE: Passer le vrai ordre sur Polymarket via API CLOB
-      if (isLive && liveWallet) {
+      // EN MODE LIVE: Passer le vrai ordre via backend sécurisé
+      if (isLive && backendConnected) {
         try {
           // Récupérer le token ID pour le marché
           const tokenId = side === 'YES' 
@@ -532,8 +533,8 @@ function App() {
             return
           }
           
-          // Passer l'ordre LIMIT réel
-          const orderResult = await liveWallet.placeLimitOrder(
+          // Passer l'ordre LIMIT via le backend sécurisé
+          const orderResult = await placeLimitOrder(
             tokenId,
             'BUY',
             entryPrice,
@@ -541,13 +542,13 @@ function App() {
           )
           
           newPosition.liveOrderId = orderResult.orderID
-          console.log('🔴 LIVE: Ordre réel envoyé à Polymarket:', orderResult.orderID)
+          console.log('🔴 LIVE: Ordre réel envoyé via backend sécurisé:', orderResult.orderID)
         } catch (error) {
           console.error('❌ Erreur ordre LIVE:', error)
           return // Ne pas continuer si l'ordre échoue
         }
-      } else if (isLive && !liveWallet) {
-        console.error('❌ Mode LIVE activé mais wallet non connecté. Ajouter VITE_PRIVATE_KEY dans .env.local')
+      } else if (isLive && !backendConnected) {
+        console.error('❌ Mode LIVE activé mais backend non connecté. Déployer le backend sur Railway.')
         return
       }
       
