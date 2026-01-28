@@ -169,14 +169,17 @@ function App() {
       const tradeSize = Math.min(currentBalance * positionPct, currentBalance * 0.05)
       const entryPrice = opp.action?.includes('YES') ? opp.market.yesPrice : opp.market.noPrice
       
-      // Simuler le résultat du trade
-      const baseWinRate = 0.45 + ((opp.confidence || 0.5) * 0.35)
-      const edgeBonus = (opp.expectedProfit || 0) > 5 ? 0.05 : 0
-      const winProbability = Math.min(baseWinRate + edgeBonus, 0.85)
+      // Simuler le résultat du trade - STYLE PRO TRADER
+      // Les pros ont: 60-75% winrate, gains 2-3x plus gros que pertes, stop loss serré
+      const baseWinRate = 0.60 + ((opp.confidence || 0.5) * 0.20) // 60-80% winrate
+      const edgeBonus = (opp.expectedProfit || 0) > 3 ? 0.05 : 0
+      const winProbability = Math.min(baseWinRate + edgeBonus, 0.82)
       const isWin = Math.random() < winProbability
-      const profit = isWin 
-        ? tradeSize * ((opp.expectedProfit || 2) / 100) * (0.7 + Math.random() * 0.6)
-        : -tradeSize * (0.05 + Math.random() * 0.1)
+      
+      // Ratio Risk/Reward pro: gains 2-4x plus gros que pertes
+      const avgGain = tradeSize * ((opp.expectedProfit || 3) / 100) * (1.5 + Math.random() * 1.5) // 150-300% du profit attendu
+      const avgLoss = tradeSize * (0.02 + Math.random() * 0.03) // Pertes limitées à 2-5% (stop loss serré)
+      const profit = isWin ? avgGain : -avgLoss
       
       const newTrade = {
         id: Date.now(),
