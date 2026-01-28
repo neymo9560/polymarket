@@ -88,13 +88,22 @@ async function getAuthHeaders() {
   }
 }
 
+// Headers pour éviter blocage Cloudflare
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Origin': 'https://polymarket.com',
+  'Referer': 'https://polymarket.com/'
+}
+
 // Creer API key
 async function createApiKey() {
   if (apiCredentials) return apiCredentials
   const headers = await getAuthHeaders()
   const response = await fetch(`${POLYMARKET_CLOB_URL}/auth/api-key`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers }
+    headers: { ...BROWSER_HEADERS, 'Content-Type': 'application/json', ...headers }
   })
   if (!response.ok) throw new Error(`Erreur API key: ${response.status}`)
   apiCredentials = await response.json()
@@ -105,6 +114,7 @@ async function createApiKey() {
 function getOrderHeaders() {
   if (!apiCredentials) throw new Error('API Key requise')
   return {
+    ...BROWSER_HEADERS,
     'Content-Type': 'application/json',
     'POLY_ADDRESS': wallet.address,
     'POLY_API_KEY': apiCredentials.apiKey,
