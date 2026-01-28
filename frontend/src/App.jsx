@@ -229,6 +229,8 @@ function App() {
           totalTrades: prev.totalTrades + 1,
           todayTrades: prev.todayTrades + 1,
           openPositions: updatedPositions.length,
+          wins: profit > 0 ? (prev.wins || 0) + 1 : (prev.wins || 0),
+          losses: profit < 0 ? (prev.losses || 0) + 1 : (prev.losses || 0),
         }))
         
         console.log(`📊 Position fermée: ${closedPos.closeReason} | P&L: $${profit.toFixed(2)}`)
@@ -484,24 +486,9 @@ function App() {
         openPositions: prev.openPositions + 1,
       }))
       
-      // Logger le trade ouvert
-      const newTrade = {
-        id: Date.now(),
-        timestamp: new Date(),
-        strategy: opp.type?.split('_')[0] || 'TRADE',
-        market: opp.market?.slug?.slice(0, 15) || 'Unknown',
-        question: opp.market?.question?.slice(0, 50) || '',
-        side,
-        price: entryPrice.toFixed(3),
-        size: tradeSize.toFixed(2),
-        profit: null, // Pas encore réalisé
-        signal: opp.signal || '',
-        confidence: opp.confidence || 0.5,
-        status: 'OPEN',
-        isReal: false,
-      }
-      
-      setTrades(prev => [newTrade, ...prev].slice(0, 100))
+      // NOTE: On n'ajoute PAS de trade ici - seulement à la fermeture
+      // pour éviter les doublons dans la liste des trades
+      console.log(`📈 Position ouverte: ${opp.market?.slug?.slice(0, 20)} | ${side} @ ${entryPrice.toFixed(3)}`)
     }, 1000) // Trade chaque seconde (comme les pros - high frequency)
     
     return () => {
