@@ -1,0 +1,57 @@
+[package]
+name = "polymarket-hft-bot"
+version = "0.1.0"
+edition = "2021"
+authors = ["HFT Bot Team"]
+description = "Polymarket HFT-lite trading bot - Top performers 2026 style"
+
+[dependencies]
+# Core async runtime
+tokio = { version = "1.40", features = ["full"] }
+tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
+
+# Polymarket CLOB client
+rs-clob-client = "0.3.0"
+# Alternative: polyfill-rs pour latence critique (décommenter si besoin)
+# polyfill-rs = { git = "https://github.com/polyfill-rs/polyfill-rs", branch = "main" }
+
+# Ethereum signing et EIP-712
+alloy-signer-local = "0.4"
+alloy-primitives = "0.8"
+alloy-sol-types = "0.8"
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+hyper = { version = "1.4", features = ["full"] }
+
+# Terminal UI
+ratatui = "0.28"
+crossterm = "0.28"
+clearscreen = "3.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utils
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dotenv = "0.15"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Math et stats
+rust_decimal = { version = "1.36", features = ["serde-float"] }
+statrs = "0.17"
+
+[features]
+default = ["paper"]
+paper = []
+live = []
+
+[[bin]]
+name = "polymarket-bot"
+path = "src/main.rs"

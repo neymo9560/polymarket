@@ -1,0 +1,65 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Dependencies
+node_modules/
+**/node_modules/
+frontend/node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+/dist
+/build
+frontend/dist/
+
+# Clés privées et données sensibles
+private_keys/
+wallets/
+balances.json
+
+# Data files
+trades.json
+market_data/
+cache/
+
+# Build artifacts
+/target/release/
+/target/debug/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Backup files
+*.bak
+*.backup
+
+# Test files
+tests/
+test_data/
+
+# Documentation build
+/docs/book/
+/target/doc/
