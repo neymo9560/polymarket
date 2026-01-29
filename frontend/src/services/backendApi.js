@@ -3,8 +3,8 @@
  * La clé privée est sur le serveur, pas ici!
  */
 
-// Backend Fly.io Frankfurt (Europe - pas bloqué par Cloudflare)
-const BACKEND_URL = 'https://polybot-backend-live.fly.dev'
+// Backend LOCAL avec VPN (seule solution qui fonctionne)
+const BACKEND_URL = 'http://localhost:3001'
 
 // Health check
 export async function checkBackendHealth() {
